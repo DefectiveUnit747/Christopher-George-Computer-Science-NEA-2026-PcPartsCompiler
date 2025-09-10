@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PcPartsCompiler HomePage</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='particles/particles.min.js') }}"></script>
+</head>
+<body>
+
+    <div id="particles-js"></div>
+
+    <div class="homePageBox">
+        <div class="homePage">
+            <h1>Welcome to <span>PcPartsCompiler</span></h1>
+            <br>
+            <button id="startButton">Click to Continue</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // Button navigation
+            const startButton = document.getElementById("startButton");
+            if (startButton) {
+                startButton.addEventListener("click", () => {
+                    window.location.href = "/homePage/mainContent";
+                });
+            }
+            particlesJS.load(
+                'particles-js',
+                '{{ url_for("static", filename="particles/particles-config.json") }}'
+            );
+        });
+    </script>
+</body>
+</html>
