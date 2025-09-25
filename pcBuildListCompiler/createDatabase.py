@@ -5,7 +5,7 @@ cursor = conn.cursor()
 
 def createDatabaseTables():
 
-    #dependancy tables
+    #tables to make db third normal form
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS manufacturer (
         manufacturerId INTEGER PRIMARY KEY,
