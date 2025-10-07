@@ -30,7 +30,7 @@ def createDatabaseTables():
     # Component Tables
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS cpu (
-        cpuId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         name TEXT,
         manufacturerId INTEGER,
         socketId INTEGER,
@@ -48,7 +48,7 @@ def createDatabaseTables():
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS motherboard (
-        moboId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         name TEXT,
         manufacturerId INTEGER,
         socketId INTEGER,
@@ -67,7 +67,7 @@ def createDatabaseTables():
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS ram (
-        ramId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         name TEXT,
         manufacturerId INTEGER,
         capacityGb INTEGER,
@@ -82,7 +82,7 @@ def createDatabaseTables():
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS storage (
-        storageId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         manufacturerId INTEGER,
         capacityGb INTEGER,
         interface TEXT,
@@ -94,7 +94,7 @@ def createDatabaseTables():
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS gpu (
-        gpuId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         name TEXT,
         manufacturerId INTEGER,
         memoryGb INTEGER,
@@ -109,7 +109,7 @@ def createDatabaseTables():
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS psu (
-        psuId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         manufacturerId INTEGER,
         model TEXT,
         wattage INTEGER,
@@ -123,7 +123,7 @@ def createDatabaseTables():
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS pcCase (
-        caseId INTEGER PRIMARY KEY,
+        partNumber TEXT PRIMARY KEY,
         manufacturerId INTEGER,
         formFactorSupport TEXT,
         gpuMaxLengthMm INTEGER,
