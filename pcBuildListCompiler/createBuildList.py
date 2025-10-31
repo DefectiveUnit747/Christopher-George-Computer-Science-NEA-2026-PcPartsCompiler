@@ -5,7 +5,7 @@ partsCategories = list(partsDb.keys())
 
 compatibilityCache = {} #for memoisation,
 budget = 1200
-
+"""
 def checkPartsCompatibility(part1, part2):
     key = (part1["id"], part2["id"])
     if key in compatibilityCache:
@@ -42,7 +42,7 @@ def filterRAM(motherboard, partsDB):
     return allCompatibleRAM
 
 def filterCase(mobo, gpu, partsDB):
-    """Filter cases compatible with both motherboard and GPU"""
+    #Filter cases compatible with both motherboard and GPU
     allCompatibleCases = []
     for case in partsDB["Case"]:
         if (checkPartsCompatibility(mobo, case) and checkPartsCompatibility(gpu, case)):
@@ -57,66 +57,22 @@ def meetsRequirements(cpu, gpu, ram, storage):
         storage["capacity_gb"] >= eldenRingMinimum["Storage"]["required_gb"]
     )
 
+def getPrice(component):
+    return component["price"]
+
+def getTotalBuildScore(build):
+    pass
+
 def dfs(budget, partsDB):
-    componentOrder = ["CPU", "Motherboard", "RAM", "GPU", "Storage", "PSU", "Case"]
-    bestBuild = None
-    bestScore = 0
+    componentOrder = ["GPU", "CPU", "Motherboard", "RAM", "Storage", "PSU"]
+    stack = [({}, 0, budget)] #stack items represented as: dictionary of current chosen parts, component index in the list above, budget left
 
-    def getPrice(component):
-        return component["price"]
-    for componentType in partsDB:
-        partsDB[componentType].sort(key=getPrice)
-
-    def search(currentBuild, currentComponentType, budgetLeft):
-        if currentComponentType >= len(componentOrder):
-            cpu, gpu = currentBuild["CPU"], currentBuild["GPU"]
-            ram, storage = currentBuild["RAM"], currentBuild["Storage"]
-
-            if meetsRequirements(cpu, gpu, ram, storage):
-                totalScore = cpu["score"] + gpu["score"]
-                return currentBuild.copy(), totalScore
-            return None, 0
-
-        componentType = componentOrder[currentComponentType]
-        candidates = findSuitableComponents(currentBuild, componentType)
-
-        bestBuild = None
-        bestScore = 0
-
-        for component in candidates:
-            if component["price"] > budgetLeft:
-                break
-
-            currentBuild[componentType] = component
-            foundBuild, foundScore = search(currentBuild, currentComponentType + 1, budgetLeft - component["price"])
-
-            if foundScore > bestScore:
-                bestScore = foundScore
-                bestBuild = foundBuild
-
-            del currentBuild[componentType]
-
-        return bestBuild, bestScore
-
-    def findSuitableComponents(currentBuild, componentType):
-        if componentType == "Motherboard" and "CPU" in currentBuild:
-            return filterMobos(currentBuild["CPU"], partsDb)
-
-        if componentType == "RAM" and "Motherboard" in currentBuild:
-            return filterRAM(currentBuild["Motherboard"], partsDb)
-
-        if componentType == "Case" and "Motherboard" in currentBuild and "GPU" in currentBuild:
-            return filterCase(currentBuild["Motherboard"], currentBuild["GPU"], partsDb)
-
-        return partsDb[componentType]
-
-    bestBuild, bestScore = search({}, 0, budget)
-    sum = 0
-    for component in bestBuild.values():
-        sum += (component["price"])
-
-    return bestBuild, sum
-
+    def search(build, index, budgetLeft):
+        if index >= len(componentOrder):
+            if meetsRequirements(build["cpu"], build["gpu"], build["ram"], build["storage"]):
+                return build, getTotalBuildScore(build)
 bestBuild, price = dfs(1200, partsDb)
 pprint.pprint(bestBuild)
 print(f"This build costs £{price}")
+"""
+

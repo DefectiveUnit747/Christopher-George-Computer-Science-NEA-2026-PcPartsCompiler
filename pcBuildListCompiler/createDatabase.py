@@ -1,141 +1,154 @@
 import sqlite3
 
-conn = sqlite3.connect("listOfComputers.db")
-cursor = conn.cursor()
+class Database:
+    def __init__(self, dbName):
+        self.conn = sqlite3.connect(dbName)
+        self.cursor = self.conn.cursor()
 
-def createDatabaseTables():
+    def createDatabaseTables(self):
+        try:
+            self.name = pcParts
+            conn = sqlite3.connect("scrapingTools/pcParts.db")
+            cursor = conn.cursor()
 
-    #tables to make db third normal form
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS manufacturer (
-        manufacturerId INTEGER PRIMARY KEY,
-        name TEXT UNIQUE
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS manufacturer (
+                manufacturerId INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS socket (
-        socketId INTEGER PRIMARY KEY,
-        name TEXT UNIQUE
-    )
-    ''')
+            # Component Tables
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cpu (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                score REAL,
+                coreCount INTEGER,
+                coreClock REAL,
+                tdp INTEGER,
+                socket TEXT,
+                manufacturerId INTEGER,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS memoryType (
-        memoryTypeId INTEGER PRIMARY KEY,
-        name TEXT UNIQUE
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS motherboard (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                socket TEXT,
+                formFactor TEXT,
+                tdp INTEGER,
+                memorySlots INTEGER,
+                memoryType TEXT,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    # Component Tables
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS cpu (
-        partNumber TEXT PRIMARY KEY,
-        name TEXT,
-        manufacturerId INTEGER,
-        socketId INTEGER,
-        coreCount INTEGER,
-        threadCount INTEGER,
-        baseClock REAL,
-        boostClock REAL,
-        tdpWatts INTEGER,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId),
-        FOREIGN KEY (socketId) REFERENCES socket(socketId)
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ram (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                score REAL,
+                capacityGb INTEGER,
+                numberOfModules INTEGER,
+                speedMhz INTEGER,
+                ddrType TEXT,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS motherboard (
-        partNumber TEXT PRIMARY KEY,
-        name TEXT,
-        manufacturerId INTEGER,
-        socketId INTEGER,
-        formFactor TEXT,
-        chipset TEXT,
-        memorySlots INTEGER,
-        memoryTypeId INTEGER,
-        wirelessNetworking TEXT,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId),
-        FOREIGN KEY (socketId) REFERENCES socket(socketId),
-        FOREIGN KEY (memoryTypeId) REFERENCES memoryType(memoryTypeId)
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS storage (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                score REAL,
+                capacityGb INTEGER,
+                readSpeed INTEGER,
+                writeSpeed INTEGER,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS ram (
-        partNumber TEXT PRIMARY KEY,
-        name TEXT,
-        manufacturerId INTEGER,
-        capacityGb INTEGER,
-        modules INTEGER,
-        speedMhz INTEGER,
-        casLatency INTEGER,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gpu (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                score REAL,
+                memoryGb INTEGER,
+                coreClock INTEGER,
+                memoryType TEXT,
+                tdp INTEGER,
+                length INTEGER,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS storage (
-        partNumber TEXT PRIMARY KEY,
-        manufacturerId INTEGER,
-        capacityGb INTEGER,
-        interface TEXT,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS psu (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                score REAL,
+                wattage INTEGER,
+                efficiencyRating TEXT,
+                formFactor TEXT,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS gpu (
-        partNumber TEXT PRIMARY KEY,
-        name TEXT,
-        manufacturerId INTEGER,
-        memoryGb INTEGER,
-        coreClock INTEGER,
-        tdpWatts INTEGER,
-        lengthMm INTEGER,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-    )
-    ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS pcCase (
+                partNumber TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                price REAL,
+                manufacturerId INTEGER,
+                url TEXT,
+                formFactorSupport TEXT,
+                gpuMaxLength INTEGER,
+                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
+            )
+            ''')
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS psu (
-        partNumber TEXT PRIMARY KEY,
-        manufacturerId INTEGER,
-        model TEXT,
-        wattage INTEGER,
-        efficiencyRating TEXT,
-        formFactor TEXT,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-    )
-    ''')
+            conn.commit()
+            conn.close()
+            print("Database tables created successfully.")
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS pcCase (
-        partNumber TEXT PRIMARY KEY,
-        manufacturerId INTEGER,
-        formFactorSupport TEXT,
-        gpuMaxLengthMm INTEGER,
-        price REAL,
-        normalisedScore REAL,
-        FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-    )
-    ''')
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
 
-    conn.commit()
-    conn.close()
+    def getManufacturerMap(self):
+        return {name.lower(): manufacturerId
+                for manufacturerId, name in self.cursor.fetchall()
+                if name is not None}
 
+    def insertComponent(self, table, data):
+        keys = ", ".join(data.keys())
+        placeholders = ", ".join(["?"] * len(data))
+        values = tuple(data.values())
+        query = f"INSERT OR REPLACE INTO {table} ({keys}) VALUES ({placeholders})"
+        self.cursor.execute(query, values)
+        self.conn.commit()
 
-    conn.commit()
-    conn.close() #Not gonna be using for a while
+    def close(self):
+        self.conn.close()
+
+pcParts = Database()
