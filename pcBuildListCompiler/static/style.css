@@ -12,7 +12,7 @@ body {
     font-family: 'Montserrat', monospace;
     margin: 0;
     padding: 20px;
-    background: linear-gradient(to right, #0f2027, #1f363d, #2c5364);
+    background: linear-gradient(to right, #080705, #40434e, #702632);
     color: #ffffff;
     font-size: 2em;
     overflow: hidden;
@@ -23,8 +23,8 @@ body {
     font-size: 1.2em;
     border: none;
     border-radius: 8px;
-    background-color: #203a43;
-    color: white;
+    background-color: #702632;
+    color: #fffffa;
     cursor: pointer;
     transition: background-color 0.3s ease;
     width: 500px;
@@ -35,15 +35,19 @@ body {
     font-size: 1.2em;
     border: none;
     border-radius: 8px;
-    background-color: #203a43;
-    color: white;
+    background-color: #702632;
+    color: #fffffa;
     cursor: pointer;
     transition: background-color 0.3s ease;
     width: 500px;
 }
 
 #startButton:hover {
-    background-color: #325662FF;
+    background-color: #912f40;
+}
+
+#maincontentPageButton:hover {
+    background-color: #912f40;
 }
 
 .homePageBox {
@@ -199,7 +203,7 @@ button[onclick="searchGame()"]:hover {
 
 #searchSuggestion {
     position: absolute;
-    top: +65px;
+    top: 65px;
     left: 0;
     right: 0;
     max-height: 200px;
@@ -238,21 +242,6 @@ button[onclick="searchGame()"]:hover {
     position: relative;
     display: inline-block;
     width: 100%;
-}
-
-#gameSearchBar {
-    width: 300px;
-    padding: 10px 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 1em;
-    transition: box-shadow 0.3s ease;
-}
-
-#gameSearchBar:disabled {
-    background-color: #f5f5f5 !important;
-    color: #888 !important;
-    cursor: not-allowed !important;
 }
 
 .preview-box {

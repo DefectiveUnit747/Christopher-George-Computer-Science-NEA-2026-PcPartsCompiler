@@ -61,40 +61,41 @@ document.addEventListener("DOMContentLoaded", () => {
         })
     })
 
-    input.addEventListener("input", () => { //Triggers when typing in the search bar
-        const query = input.value.trim(); //removes whitespaces
-        if (query.length < 3) {
-           autoCompleteSuggestion.innerHTML = "";
-           return;
-        }
-
-        fetch(`/searchForGame?q=${encodeURIComponent(query)}`) //Sends get request to the backend flask route
-            .then(res => res.json())
-            .then(games => {
-
-                autoCompleteSuggestion.innerHTML = games.map(game => //map() turns the array containing objects of the game suggestions into strings of names in a new array
-                    `<div class="suggestion-item">${game.name}</div>`
-                ).join("");
-
-                document.querySelectorAll(".suggestion-item").forEach((item, index)  => { //Finds all items with the class suggestion-item
-                    item.addEventListener("click", () => {
-                        input.value = games[index].name
-                        autoCompleteSuggestion.innerHTML = "";
-
-                        preview.innerHTML = `
-                            <div class="preview-box">
-                                ${games[index].background_image ? `<img src="${games[index].background_image}" class="preview-image">` : ""}
-                                <p><strong>Selected:</strong> ${games[index].name}</p>
-                            </div>
-                        `;
-                    })
-                })
-            })
-            .catch(error => { //Clears suggestions where there are any errors e.g. network or connecting to API
-                console.error('Error fetching games:', error);
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            const query = input.value.trim();
+            if (query.length < 3) {
                 autoCompleteSuggestion.innerHTML = "";
-            });
-    })
+                return;
+            }
+
+            fetch(`/searchForGame?q=${encodeURIComponent(query)}`)
+                .then(res => res.json())
+                .then(games => {
+                    autoCompleteSuggestion.innerHTML = games.map(game =>
+                        `<div class="suggestion-item">${game.name}</div>`
+                    ).join("");
+
+                    document.querySelectorAll(".suggestion-item").forEach((item, index) => {
+                        item.addEventListener("click", () => {
+                            input.value = games[index].name;
+                            autoCompleteSuggestion.innerHTML = "";
+
+                            preview.innerHTML = `
+                                <div class="preview-box">
+                                    ${games[index].background_image ? `<img src="${games[index].background_image}" class="preview-image">` : ""}
+                                    <p><strong>Selected:</strong> ${games[index].name}</p>
+                                </div>
+                            `;
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching games:', error);
+                    autoCompleteSuggestion.innerHTML = "";
+                });
+        }
+    });
 
     startButton.addEventListener("click", () => {
         window.location.href = "/homePage/mainContent";

@@ -9,9 +9,9 @@
 <body>
     <div id="particles-js"></div>
 
-    <div class = "mainPageFlexContainer">
+    <div class="mainPageFlexContainer">
 
-        <div class = "box">
+        <div class="box">
             <label for="budgetSlider"><strong>Budget: </strong>£<span id="budgetValue">1000</span></label>
             <input type="range" id="budgetSlider" min="600" max="5000" step="50" value="2800">
             <br><br>
@@ -25,26 +25,24 @@
             <br>
 
             <div class="brand-selector">
-            <h3><label>GPU Brand Preference:</label></h3>
-            <div class="button-group">
-                <button id="btn-any" data-brand = "any">Any</button>
-                <button id="btn-nvidia" data-brand = "nvidia">NVIDIA</button>
-                <button id="btn-intel" data-brand = "intel">Intel</button>
-                <button id="btn-amd" data-brand = "amd">AMD</button>
-            </div> <br>
+                <h3><label>GPU Brand Preference:</label></h3>
+                <div class="button-group">
+                    <button id="btn-any" data-brand="any">Any</button>
+                    <button id="btn-nvidia" data-brand="nvidia">NVIDIA</button>
+                    <button id="btn-intel" data-brand="intel">Intel</button>
+                    <button id="btn-amd" data-brand="amd">AMD</button>
+                </div>
+            </div>
         </div>
 
-        </div>
-
-        <div class = "box">
+        <div class="box">
             <div class="searchForGamesBar">
-            <input type="text" id="gameSearchBar" placeholder="Search for a game">
-            <!-- <button onclick="searchGame()">Click</button> -->
-            <br><br>
-            <div id="gamePreview"></div>
-            <div id = "searchSuggestion"></div>
-            <br><br><br><br><br><br><br><br><br><br><br><br>
-            <button id="mainContentPageButton">Click to Continue</button>
+                <input type="text" id="gameSearchBar" placeholder="Search for a game">
+                <br><br>
+                <div id="gamePreview"></div>
+                <div id="searchSuggestion"></div>
+                <br><br><br><br><br><br><br><br><br><br><br><br>
+                <button id="maincontentPageButton">Click to Continue</button>
             </div>
         </div>
 
@@ -56,11 +54,14 @@
             particlesJS.load('particles-js', '{{ url_for("static", filename="particles/particles-config.json") }}', () => {
                 console.log('particles.js config loaded');
             });
+
+            const startButton = document.getElementById("maincontentPageButton");
+            if (startButton) {
+                startButton.addEventListener("click", () => {
+                    window.location.href = "/homePage/mainContent/results";
+                });
+            }
         });
     </script>
 </body>
 </html>
-
-
-
-

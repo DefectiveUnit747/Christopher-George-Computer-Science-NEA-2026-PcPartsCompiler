@@ -1,7 +1,7 @@
 from flask import Flask, render_template, redirect, jsonify, request
 import requests
 import sqlite3
-
+from savedPreferences import *
 from pcBuildListCompiler.savedPreferences import extractPreferences, saveGamePreference
 from storage import Storage
 
@@ -9,6 +9,7 @@ app = Flask(__name__)
 app.secret_key = "SuperSecretKeyTEMPORARY"
 RAWG_API_KEY = "a8008f8d0c084fe6a24273dc4fe4ba3e"
 url = "https://api.rawg.io/api"
+getRequirementsUrl = "https://api.rawg.io/api/games"
 
 @app.route('/')
 def index():
@@ -31,8 +32,13 @@ def searchForGame():
     response = requests.get(url)
 
     if response.status_code == 200: #checks is the https request from the api is successful
-        results = response.json().get("results", [])[:5] #Shows the 3 most similar results
-        games = [{"name": game["name"], "background_image": game.get("background_image")} for game in results] #The names of all the games in the list
+        results = response.json().get("results", [])[:8] #Gets the 10 most similar results, Only 5 displayed but this is to account for some ganes who's requirements/other details not stored on the api
+        for result in results:
+            if not saveGamePreference(result["name"], RAWG_API_KEY, getRequirementsUrl):
+                results.remove(result)
+
+        games = [{"name": game["name"], "background_image": game.get("background_image")} for game in results[:5]] #The names of all the games in the list
+        print(games)
         return jsonify(games)
 
 @app.route("/saveGame", methods=["POST"])
@@ -40,7 +46,7 @@ def saveGame():
     try:
         data = request.get_json()
         gameName = data.get("name")
-        gameData = saveGamePreference(gameName)
+        gameData = saveGamePreference(gameName,RAWG_API_KEY, url)
 
         Storage.gameData = gameData
 
@@ -55,7 +61,6 @@ def saveValues():
     preferences = extractPreferences(data) #Function is in the extractPreferences python file
     Storage.buildPreferences = preferences
     return jsonify(preferences), 200
-
 
 @app.route("/homePage/mainContent/results")
 def resultsPage():

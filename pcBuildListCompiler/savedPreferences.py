@@ -1,7 +1,8 @@
+import urllib
 import requests
 
 RAWG_API_KEY = "a8008f8d0c084fe6a24273dc4fe4ba3e"
-url = "https://api.rawg.io/api"
+url = "https://api.rawg.io/api/games"
 
 def extractPreferences(data):
     preferences = {
@@ -15,37 +16,54 @@ def extractPreferences(data):
 def saveGamePreference(gameName, RAWG_API_KEY, url):
     params = {
         "key": RAWG_API_KEY, #Parameters for the key, and what to search for (the name)
-        "search": gameName
-    }
+        "search": gameName}
 
-    response = requests.get(url,params=params)  # Makes an HTTP GET request to get the object of the game, status code, and headers (some metadata)
-    if response.status_code != 200: #Error handling, makes sure that the status is 200 which indicates no errors
-        return None, {"error": "Failed to fetch game list"}, 500
+    response = requests.get(url, params=params)
+    data = response.json()
 
-    results = response.json().get("results", []) #.json turns data into python dict, and pulls the list containing the game from it
-    if not results:
-        raise Exception("Game not Found")#Checks if the list is empty or not
+    # Step 2: Get the slug of the first matching game
+    if data['results']:
+        game_slug = data['results'][0]['slug']
+        print(f"Found game slug: {game_slug}")
+    else:
+        return None
 
-    game = results[0]
-    gameID = game["id"]
+    # Step 3: Get detailed info including requirements
+    details_url = f'https://api.rawg.io/api/games/{game_slug}'
+    details_params = {'key': RAWG_API_KEY}
+    details_response = requests.get(details_url, params=details_params)
+    details_data = details_response.json()
 
-    infoParams = {
-        "key": RAWG_API_KEY,
-    }
-    detail_res = requests.get(url, params = infoParams) #Fetches the detailed information for the game
-    if detail_res.status_code != 200: #Error Handling
-        raise Exception("error", "Failed to fetch detailed info")
+    # Step 4: Extract system requirements
+    platforms = details_data.get('platforms', [])
+    for platform in platforms:
+        name = platform["platform"]["name"].lower()
+        if name == "pc":
+            requirements = platform.get('requirements', {})
+            if requirements:
+                recommendedRequirements = requirements.get('recommended', "N/A")
+                return normaliseRequirements(recommendedRequirements)
+    else:
+        return None
 
-    detail_data = detail_res.json() #converts from JSON to python dictionary
-    requirements = {}
-    for platform in detail_data.get("platforms", []): #Gets the requirements into a list
-        if platform.get("requirements"):
-            requirements = platform["requirements"]
-            break
+def normaliseRequirements(requirements):
+    normalisedRequirements = {}
 
-    gameData = {
-        "gameName": gameName,
-        "gameID": gameID,
-        "requirements": requirements,
-    }
-    return gameData
+    lineByLine = requirements.split("\n")
+    for line in lineByLine:
+        line = line.strip()
+        if ":" not in line:
+            continue
+
+        if line.lower().startswith("processor"):
+            normalisedRequirements["cpu"] = line.split(":", 1)[1].split(" or ")[0].strip()
+        elif line.lower().startswith("memory") or line.lower().startswith("ram"):
+            normalisedRequirements["memory"] = line.split(":", 1)[1].split(" or ")[0].strip()
+        elif line.lower().startswith("graphics"):
+            normalisedRequirements["graphics"] = line.split(":", 1)[1].split(" or ")[0].strip()
+        elif line.lower().startswith("video"):
+            normalisedRequirements["video"] = line.split(":", 1)[1].split(" or ")[0].strip()
+        elif line.lower().startswith("storage") or line.lower().startswith("hard drive"):
+            normalisedRequirements["storage"] = line.split(":", 1)[1].strip()
+
+    return normalisedRequirements

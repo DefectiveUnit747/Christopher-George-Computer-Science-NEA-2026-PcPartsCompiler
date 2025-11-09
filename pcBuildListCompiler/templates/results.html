@@ -1,13 +1,30 @@
 <!DOCTYPE html>
-
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8">
-    <title>Results Page</title>
+    <title>PcPartsCompiler</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='particles/particles.min.js') }}"></script>
-  </head>
+</head>
 <body>
-<h1>""SUIII"</h1>
+    <div id="particles-js"></div>
+
+    <!-- Empty content container -->
+    <div class="emptyContentContainer">
+        <!-- Add your content here -->
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            particlesJS.load(
+                'particles-js',
+                '{{ url_for("static", filename="particles/particles-config.json") }}',
+                () => {
+                    console.log('particles.js background loaded');
+                }
+            );
+        });
+    </script>
 </body>
 </html>
