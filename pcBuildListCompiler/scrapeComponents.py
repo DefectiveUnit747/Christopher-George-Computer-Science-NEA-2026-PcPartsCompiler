@@ -1,0 +1,228 @@
+from createDatabase import *
+from scraper import Scraper
+from bs4 import BeautifulSoup
+import time
+import random
+from dataNormalisationFunctions import *
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+#ADD IN LOGGING
+
+manufacturers = [
+    "ADATA", "Aerocool", "AMD", "Antec", "ASRock", "ASUS", "be quiet!", "Biostar",
+    "CaseLabs", "Colorful", "Cooler Master", "Corsair", "Cougar", "Crucial",
+    "Deepcool", "ECS", "Enermax", "EVGA", "Foxconn", "Fractal Design", "Gainward",
+    "GALAX", "Gigabyte", "G.Skill", "HIS", "Hitachi", "In Win", "Inno3D", "Intel",
+    "Kingston", "Lian Li", "Matrox", "MSI", "Mushkin", "NVIDIA", "NZXT", "Palit",
+    "Patriot", "Phanteks", "Plextor", "PNY", "PowerColor", "Rosewill", "Sapphire",
+    "Samsung", "SanDisk", "Seagate", "Seasonic", "SilverStone", "SK Hynix",
+    "Super Flower", "Supermicro", "TeamGroup", "Thermaltake", "Toshiba", "VisionTek",
+    "Western Digital", "XFX", "Zotac"
+]
+fieldMapping = {
+            "cpu": {
+                "CPU Base Speed": "coreClock",
+                "CPU Manufacturer": "manufacturer",
+                "CPU Base TDP": "tdp",
+                "Cache": "cache",
+                "Socket": "socket",
+                "Number of Cores": "coreCount",
+                "CPU Threads": "threads"
+            },
+
+            "motherboard": {
+                "Manufacturer": "manufacturer",
+                "Power Requirement (auto)": "tdp",
+                "Socket": "socket",
+                "Motherboard Form Factor": "formFactor",
+                "Memory Slot": "memorySlots",
+                "Memory Type": "memoryType",
+                "Maximum RAM": "maxMemory"
+            },
+
+            "gpu": {
+                "Chipset Manufacturer": "manufacturer",
+                "Memory Size": "memoryGb",
+                "Memory Type": "memoryType",
+                "Depth": "length",
+                "Number of Cores": "coreCount",
+                "Power Consumption": "tdpWatts",
+                "Base Chip Clock": "coreClock",
+                "Boost Chip Clock": "coreClock"
+            },
+
+            "psu": {
+                "Manufacturer": "manufacturer",
+                "Power": "wattage",
+                "80Plus Rated": "efficiencyRating",
+                "PSU Form Factor": "formFactor",
+            },
+
+            "pcCase": {
+                "Manufacturer": "manufacturer",
+                "Maximum Motherboard Size Supported": "formFactorSupport",
+                "GPU Length": "gpuMaxLength",
+            },
+
+            "storage": {
+                "Manufacturer": "manufacturer",
+                "Drive Capacity": "capacityGb",
+                "Read Speed": "readSpeed",
+                "Write Speed": "writeSpeed",
+            },
+
+            "ram": {
+                "Manufacturer": "manufacturer",
+                "Memory Size": "capacityGb",
+                "Memory DIMM Count": "numberOfModules",
+                "Memory Speed": "speedMhz",
+                "Memory Type": "ddrType",
+            }
+        }
+finalFullComponentMap = {
+    "cpu": {
+        "normalizer": normaliseCpuScrapedValues,
+        "table": "cpu",
+        "categoryUrl": "/pc-components/cpu-processors"
+    },
+    "gpu": {
+        "normalizer": normaliseGpuScrapedValues,
+        "table": "gpu",
+        "categoryUrl": "/pc-components/graphics-cards"
+    },
+    "ram": {
+        "normalizer": normaliseRamScrapedValues,
+        "table": "ram",
+        "categoryUrl": "/pc-components/memory/desktop-memory"
+    },
+    "motherboard": {
+        "normalizer": normaliseMotherboardScrapedValues,
+        "table": "motherboard",
+        "categoryUrl": "/pc-components/motherboards"
+    },
+    "psu": {
+        "normalizer": normalisePsuScrapedValues,
+        "table": "psu",
+        "categoryUrl": "/pc-components/power-supplies"
+    },
+    "storage": {
+        "normalizer": normaliseStorageScrapedValues,
+        "table": "storage",
+        "categoryUrl": "/storage"
+    },
+    "pcCase": {
+        "normalizer": normaliseCaseScrapedValues,
+        "table": "pcCase",
+        "categoryUrl": "/pc-components/cases"
+    }
+}
+
+computerParts = Database("computerParts.db")
+computerParts.createDatabaseTables()
+computerParts.addInManufacturers(manufacturers)
+manufacturerMap = computerParts.getManufacturerMap()
+
+base_url = "https://www.cclonline.com"
+
+class componentScraper(Scraper):
+    def __init__(self, baseUrl):
+        super().__init__(baseUrl, "")
+        self.database = computerParts
+        self.manufacturerMap = self.database.getManufacturerMap()
+
+    def genericComponentScraper(self, normalisationFunction, componentTableName):
+        try:
+            links = self.getProductLinks()
+            print(f"Found {len(links)} links")
+
+            counter = 0
+            for componentLink in links:
+                try:
+                    counter += 1
+                    print(f"\n[{counter}/{len(links)}] -> {componentLink}")
+                    self.driver.get(componentLink)
+
+                    time.sleep(random.uniform(10, 20))
+
+                    soup = BeautifulSoup(self.driver.page_source, "html.parser")
+
+                    name, partNumber, price, url = self.getNameNumberPriceUrl(componentLink, soup)
+
+                    if not name or not partNumber or not price:
+                        print("  Missing info")
+                        continue
+
+                    specs = self.extractFromSpecsTable(fieldMapping, soup, componentTableName)
+
+                    if not specs:
+                        print("  No specs")
+                        continue
+
+                    manufacturerId = self.manufacturerMap.get(specs.get("manufacturer", "").lower()) if specs.get(
+                        "manufacturer") else None
+                    score = 0
+                    normalisedComponent = normalisationFunction(specs, name, manufacturerId, partNumber, price, url,
+                                                                score)
+                    self.database.insertComponent(componentTableName, normalisedComponent)
+                    print(f"  {name}")
+
+                    if counter % 5 == 0:
+                        extraDelay = random.uniform(30, 60)
+                        print(f"  Cooling down {extraDelay:.0f}s...")
+                        time.sleep(extraDelay)
+
+                except Exception as e:
+                    print(f"  Error: {e}")
+                    time.sleep(random.uniform(20, 30))
+                    continue
+
+        except Exception as e:
+            print(f"BAD: {e}")
+            raise e
+
+    def cpuScraping(self):
+        self.categoryUrl = finalFullComponentMap["cpu"]["categoryUrl"]
+        self.genericComponentScraper(normaliseCpuScrapedValues, "cpu")
+
+    def gpuScraping(self):
+        self.categoryUrl = finalFullComponentMap["gpu"]["categoryUrl"]
+        self.genericComponentScraper(normaliseGpuScrapedValues, "gpu")
+
+    def ramScraping(self):
+        self.categoryUrl = finalFullComponentMap["ram"]["categoryUrl"]
+        self.genericComponentScraper(normaliseRamScrapedValues, "ram")
+
+    def psuScraping(self):
+        self.categoryUrl = finalFullComponentMap["psu"]["categoryUrl"]
+        self.genericComponentScraper(normalisePsuScrapedValues, "psu")
+
+    def storageScraping(self):
+        self.categoryUrl = finalFullComponentMap["storage"]["categoryUrl"]
+        self.genericComponentScraper(normaliseStorageScrapedValues, "storage")
+
+    def caseScraping(self):
+        self.categoryUrl = finalFullComponentMap["pcCase"]["categoryUrl"]
+        self.genericComponentScraper(normaliseCaseScrapedValues, "pcCase")
+
+    def motherboardScraping(self):
+        self.categoryUrl = finalFullComponentMap["motherboard"]["categoryUrl"]
+        self.genericComponentScraper(normaliseMotherboardScrapedValues, "motherboard")
+
+    def scrapeAllComponents(self):
+        for componentType, config in finalFullComponentMap.items():
+            try:
+                self.categoryUrl = config["categoryUrl"]
+                self.genericComponentScraper(config["normalizer"], config["table"])
+            except Exception as e:
+                print(f"{componentType} failed: {e}")
+
+scraper = componentScraper("https://www.cclonline.com")
+scraper.gpuScraping()
+scraper.driver.quit()
+scraper.driver = None
+
+#FIX THE parameter issue with categoryUrl
+#Fix the scraper
+#Put all stuff in Database
+#Start on build list
