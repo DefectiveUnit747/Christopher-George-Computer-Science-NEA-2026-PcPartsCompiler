@@ -1,14 +1,11 @@
 import time
-
+import io
 import requests
-from selenium import webdriver
-from selenium.webdriver import ActionChains
-from selenium.webdriver.chrome.options import Options
+from PIL import Image
 from bs4 import BeautifulSoup
-from selenium_stealth import stealth
-import random
 import undetected_chromedriver as uc
 import logging
+import os
 
 baseUrl = "https://www.cclonline.com"
 componentLinksToAddOn = ["/pc-components/cpu-processors", "/pc-components/motherboards",
@@ -43,22 +40,6 @@ class Scraper:
         })
 
         self.requests_session = session
-
-    def humanLikeScrollPage(self):
-        total = self.driver.execute_script("return document.body.scrollHeight")
-        step = random.randint(200, 500)
-
-        for y in range(0, total, step):
-            self.driver.execute_script(f"window.scrollTo(0, {y})")
-            time.sleep(random.uniform(0.1, 0.5))
-
-    def randomMouseMovement(self):
-        try:
-            actions = ActionChains(self.driver)
-            actions.move_by_offset(-100, 100)
-            actions.perform()
-        except:
-            pass
 
     def getProductLinks(self):
         links = set()
@@ -149,5 +130,22 @@ class Scraper:
         print(name, partNumber, price)
         return name, partNumber, price, url
 
+    def downloadPartImage(self, soup, partNumber, componentSpecificDownloadPath):
+        imageTag = soup.find("img", id = "imgImage") #Gets first image only, select is for css tags
+        imageUrl = imageTag.get("data-src") or imageTag.get("src") #Accounts for if the website ever uses lazy load
+
+        if imageUrl.startswith("/"):
+            imageUrl = self.baseUrl + imageUrl
+        imageUrl = imageUrl.split("?")[0]
+        imageContent = requests.get(imageUrl).content
+        imageFile = io.BytesIO(imageContent)
+        image = Image.open(imageFile)
+        folder = (f"productImages/{componentSpecificDownloadPath}")
+        os.makedirs(folder, exist_ok=True)
+        filePath = os.path.join(folder, f"{partNumber}.jpg")
+        image.save(filePath, "JPEG")
+        print("saved")
+        fileName = f"{partNumber}.jpg"
+        return f"productImages/{componentSpecificDownloadPath}/{fileName}"
 
 

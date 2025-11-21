@@ -1,12 +1,14 @@
 import sqlite3
 
 manufacturers = [
-    "Intel", "AMD", "NVIDIA", "ASUS", "MSI", "Gigabyte", "ASRock", "Biostar", "EVGA",
-    "Corsair", "G.Skill", "Kingston", "Crucial", "TeamGroup", "Patriot", "ADATA",
-    "Samsung", "Western Digital", "Seagate", "SK Hynix", "Toshiba",
-    "Cooler Master", "Thermaltake", "be quiet!", "SilverStone", "NZXT", "Fractal Design",
-    "Lian Li", "Phanteks", "Antec"
-]
+
+    "ADATA", "Aerocool", "AMD", "Antec", "ASRock", "ASUS", "be quiet!", "Biostar", "CaseLabs", "Colorful",
+    "Cooler Master", "Corsair", "Cougar", "Crucial", "Deepcool", "ECS", "Enermax", "EVGA", "Foxconn", "Fractal Design",
+    "Gainward", "GALAX", "Gigabyte", "G.Skill", "HIS", "Hitachi", "In Win", "Inno3D", "Intel", "Kingston",
+    "Lian Li", "Matrox", "MSI", "Mushkin", "NVIDIA", "NZXT", "Palit", "Patriot", "Phanteks", "Plextor",
+    "PNY", "PowerColor", "Rosewill", "Sapphire", "Samsung", "SanDisk", "Seagate", "Seasonic", "SilverStone", "SK Hynix",
+    "Super Flower", "Supermicro", "TeamGroup", "Thermaltake", "Toshiba", "VisionTek", "Western Digital", "XFX", "Zotac"
+                ]
 
 class Database:
     def __init__(self, dbName):
@@ -16,7 +18,6 @@ class Database:
 
     def createDatabaseTables(self):
         try:
-            # Manufacturer table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS manufacturer (
                 manufacturerId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,7 +25,6 @@ class Database:
             )
             ''')
 
-            # CPU table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS cpu (
                 partNumber TEXT PRIMARY KEY,
@@ -40,11 +40,11 @@ class Database:
                 threads INTEGER,
                 tdpWatts INTEGER,
                 socketId TEXT,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
-            # Motherboard table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS motherboard (
                 partNumber TEXT PRIMARY KEY,
@@ -62,11 +62,11 @@ class Database:
                 pcieSlots INTEGER,
                 m2Slots INTEGER,    
                 sataPorts INTEGER,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
-            # RAM table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS ram (
                 partNumber TEXT PRIMARY KEY,
@@ -81,11 +81,11 @@ class Database:
                 ddrType TEXT,
                 voltage REAL,
                 eccSupport BOOLEAN,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
-            # Storage table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS storage (
                 partNumber TEXT PRIMARY KEY,
@@ -100,11 +100,11 @@ class Database:
                 interface TEXT,
                 formFactor TEXT,
                 cacheMb INTEGER,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
-            # GPU table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS gpu (
                 partNumber TEXT PRIMARY KEY,
@@ -118,11 +118,11 @@ class Database:
                 memoryType TEXT,
                 tdpWatts INTEGER,
                 lengthMm INTEGER,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
-            # PSU table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS psu (
                 partNumber TEXT PRIMARY KEY,
@@ -137,11 +137,11 @@ class Database:
                 modular BOOLEAN,
                 noiseLevelDb REAL,
                 connectorCount INTEGER,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
-            # Case table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS pcCase (
                 partNumber TEXT PRIMARY KEY,
@@ -153,6 +153,7 @@ class Database:
                 gpuMaxLength INTEGER,
                 radiatorSupport TEXT,
                 psuFormFactorSupport TEXT,
+                imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')

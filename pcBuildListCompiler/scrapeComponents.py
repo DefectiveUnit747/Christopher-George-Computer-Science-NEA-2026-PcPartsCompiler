@@ -41,15 +41,17 @@ fieldMapping = {
                 "Maximum RAM": "maxMemory"
             },
 
-            "gpu": {
+            "gpu": { #Finished
                 "Chipset Manufacturer": "manufacturer",
                 "Memory Size": "memoryGb",
                 "Memory Type": "memoryType",
                 "Depth": "length",
                 "Number of Cores": "coreCount",
                 "Power Consumption": "tdpWatts",
+                "12V-2x6 Rating": "tdpWatts",
                 "Base Chip Clock": "coreClock",
-                "Boost Chip Clock": "coreClock"
+                "Boost Chip Clock": "coreClock",
+                "GPU Length": "length"
             },
 
             "psu": {
@@ -80,6 +82,15 @@ fieldMapping = {
                 "Memory Type": "ddrType",
             }
         }
+componentImageFolders = {
+    "cpu": "cpuImages",
+    "gpu": "gpuImages",
+    "ram": "ramImages",
+    "motherboard": "motherboardImages",
+    "psu": "psuImages",
+    "storage": "storageImages",
+    "pcCase": "caseImages"
+}
 finalFullComponentMap = {
     "cpu": {
         "normalizer": normaliseCpuScrapedValues,
@@ -126,9 +137,9 @@ manufacturerMap = computerParts.getManufacturerMap()
 base_url = "https://www.cclonline.com"
 
 class componentScraper(Scraper):
-    def __init__(self, baseUrl):
+    def __init__(self, baseUrl, database):
         super().__init__(baseUrl, "")
-        self.database = computerParts
+        self.database = database
         self.manufacturerMap = self.database.getManufacturerMap()
 
     def genericComponentScraper(self, normalisationFunction, componentTableName):
@@ -164,17 +175,19 @@ class componentScraper(Scraper):
                     score = 0
                     normalisedComponent = normalisationFunction(specs, name, manufacturerId, partNumber, price, url,
                                                                 score)
+                    imageFolder = componentImageFolders.get(componentTableName)
+                    imagePath = self.downloadPartImage(soup, partNumber, imageFolder)
+                    normalisedComponent["imagePath"] = imagePath
                     self.database.insertComponent(componentTableName, normalisedComponent)
                     print(f"  {name}")
 
                     if counter % 5 == 0:
-                        extraDelay = random.uniform(30, 60)
+                        extraDelay = random.uniform(3, 15)
                         print(f"  Cooling down {extraDelay:.0f}s...")
                         time.sleep(extraDelay)
 
                 except Exception as e:
                     print(f"  Error: {e}")
-                    time.sleep(random.uniform(20, 30))
                     continue
 
         except Exception as e:
@@ -217,8 +230,8 @@ class componentScraper(Scraper):
             except Exception as e:
                 print(f"{componentType} failed: {e}")
 
-scraper = componentScraper("https://www.cclonline.com")
-scraper.gpuScraping()
+scraper = componentScraper("https://www.cclonline.com", computerParts)
+scraper.cpuScraping()
 scraper.driver.quit()
 scraper.driver = None
 
