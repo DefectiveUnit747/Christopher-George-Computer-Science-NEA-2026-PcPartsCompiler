@@ -18,6 +18,8 @@ class Database:
 
     def createDatabaseTables(self):
         try:
+            self.cursor.execute("DROP TABLE IF EXISTS pcCase;")
+
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS manufacturer (
                 manufacturerId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,6 +54,7 @@ class Database:
                 price REAL,
                 manufacturerId INTEGER,
                 url TEXT,
+                score INTEGER,
                 socketId TEXT,
                 formFactor TEXT,
                 chipset TEXT,
@@ -79,8 +82,6 @@ class Database:
                 numberOfModules INTEGER,
                 speedMhz INTEGER,
                 ddrType TEXT,
-                voltage REAL,
-                eccSupport BOOLEAN,
                 imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
@@ -97,9 +98,7 @@ class Database:
                 capacityGb INTEGER,
                 readSpeed REAL,
                 writeSpeed REAL,
-                interface TEXT,
                 formFactor TEXT,
-                cacheMb INTEGER,
                 imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
@@ -135,24 +134,21 @@ class Database:
                 efficiencyRating TEXT,
                 formFactor TEXT,
                 modular BOOLEAN,
-                noiseLevelDb REAL,
-                connectorCount INTEGER,
                 imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )
             ''')
 
             self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS pcCase (
+            CREATE TABLE IF NOT EXISTS cases (
                 partNumber TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 price REAL,
                 manufacturerId INTEGER,
                 url TEXT,
+                score INTEGER,
                 formFactorSupport TEXT,
                 gpuMaxLength INTEGER,
-                radiatorSupport TEXT,
-                psuFormFactorSupport TEXT,
                 imagePath TEXT,
                 FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
             )

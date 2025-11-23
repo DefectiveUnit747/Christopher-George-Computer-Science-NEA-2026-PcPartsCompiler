@@ -4,9 +4,6 @@ from bs4 import BeautifulSoup
 import time
 import random
 from dataNormalisationFunctions import *
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
 #ADD IN LOGGING
 
 manufacturers = [
@@ -18,7 +15,7 @@ manufacturers = [
     "Patriot", "Phanteks", "Plextor", "PNY", "PowerColor", "Rosewill", "Sapphire",
     "Samsung", "SanDisk", "Seagate", "Seasonic", "SilverStone", "SK Hynix",
     "Super Flower", "Supermicro", "TeamGroup", "Thermaltake", "Toshiba", "VisionTek",
-    "Western Digital", "XFX", "Zotac"
+    "Western Digital", "XFX", "Zotac", "Micron", "GameMax"
 ]
 fieldMapping = {
             "cpu": {
@@ -27,6 +24,7 @@ fieldMapping = {
                 "CPU Base TDP": "tdp",
                 "Cache": "cache",
                 "Socket": "socket",
+                "CPU Socket": "socket",
                 "Number of Cores": "coreCount",
                 "CPU Threads": "threads"
             },
@@ -59,19 +57,24 @@ fieldMapping = {
                 "Power": "wattage",
                 "80Plus Rated": "efficiencyRating",
                 "PSU Form Factor": "formFactor",
+                "Modular Cables": "modularity"
             },
 
-            "pcCase": {
+            "cases": {
                 "Manufacturer": "manufacturer",
                 "Maximum Motherboard Size Supported": "formFactorSupport",
                 "GPU Length": "gpuMaxLength",
+                "PSU Form Factor": "psuFormFactorSupport"
             },
 
             "storage": {
                 "Manufacturer": "manufacturer",
                 "Drive Capacity": "capacityGb",
+                "Disk Capacity": "capacityGb",
                 "Read Speed": "readSpeed",
                 "Write Speed": "writeSpeed",
+                "Disk Speed": ["readSpeed", "writeSpeed"],
+                "In The Box": "formFactor"
             },
 
             "ram": {
@@ -89,42 +92,42 @@ componentImageFolders = {
     "motherboard": "motherboardImages",
     "psu": "psuImages",
     "storage": "storageImages",
-    "pcCase": "caseImages"
+    "cases": "caseImages"
 }
 finalFullComponentMap = {
     "cpu": {
-        "normalizer": normaliseCpuScrapedValues,
+        "normaliser": normaliseCpuScrapedValues,
         "table": "cpu",
         "categoryUrl": "/pc-components/cpu-processors"
     },
     "gpu": {
-        "normalizer": normaliseGpuScrapedValues,
+        "normaliser": normaliseGpuScrapedValues,
         "table": "gpu",
         "categoryUrl": "/pc-components/graphics-cards"
     },
     "ram": {
-        "normalizer": normaliseRamScrapedValues,
+        "normaliser": normaliseRamScrapedValues,
         "table": "ram",
         "categoryUrl": "/pc-components/memory/desktop-memory"
     },
     "motherboard": {
-        "normalizer": normaliseMotherboardScrapedValues,
+        "normaliser": normaliseMotherboardScrapedValues,
         "table": "motherboard",
         "categoryUrl": "/pc-components/motherboards"
     },
     "psu": {
-        "normalizer": normalisePsuScrapedValues,
+        "normaliser": normalisePsuScrapedValues,
         "table": "psu",
         "categoryUrl": "/pc-components/power-supplies"
     },
     "storage": {
-        "normalizer": normaliseStorageScrapedValues,
+        "normaliser": normaliseStorageScrapedValues,
         "table": "storage",
-        "categoryUrl": "/storage"
+        "categoryUrl": ["/storage/hard-drives", "/storage/solid-state-drives-ssds"]
     },
-    "pcCase": {
-        "normalizer": normaliseCaseScrapedValues,
-        "table": "pcCase",
+    "cases": {
+        "normaliser": normaliseCaseScrapedValues,
+        "table": "cases",
         "categoryUrl": "/pc-components/cases"
     }
 }
@@ -155,6 +158,7 @@ class componentScraper(Scraper):
                     self.driver.get(componentLink)
 
                     time.sleep(random.uniform(10, 20))
+                    time.sleep(5)
 
                     soup = BeautifulSoup(self.driver.page_source, "html.parser")
 
@@ -177,6 +181,8 @@ class componentScraper(Scraper):
                                                                 score)
                     imageFolder = componentImageFolders.get(componentTableName)
                     imagePath = self.downloadPartImage(soup, partNumber, imageFolder)
+                    if imagePath:
+                        normalisedComponent["imagePath"] = imagePath
                     normalisedComponent["imagePath"] = imagePath
                     self.database.insertComponent(componentTableName, normalisedComponent)
                     print(f"  {name}")
@@ -211,12 +217,13 @@ class componentScraper(Scraper):
         self.genericComponentScraper(normalisePsuScrapedValues, "psu")
 
     def storageScraping(self):
-        self.categoryUrl = finalFullComponentMap["storage"]["categoryUrl"]
-        self.genericComponentScraper(normaliseStorageScrapedValues, "storage")
+        for i in finalFullComponentMap["storage"]["categoryUrl"]:
+            self.categoryUrl = i
+            self.genericComponentScraper(normaliseStorageScrapedValues, "storage")
 
     def caseScraping(self):
-        self.categoryUrl = finalFullComponentMap["pcCase"]["categoryUrl"]
-        self.genericComponentScraper(normaliseCaseScrapedValues, "pcCase")
+        self.categoryUrl = finalFullComponentMap["cases"]["categoryUrl"]
+        self.genericComponentScraper(normaliseCaseScrapedValues, "cases")
 
     def motherboardScraping(self):
         self.categoryUrl = finalFullComponentMap["motherboard"]["categoryUrl"]
@@ -232,10 +239,16 @@ class componentScraper(Scraper):
 
 scraper = componentScraper("https://www.cclonline.com", computerParts)
 scraper.cpuScraping()
+scraper.gpuScraping()
+scraper.ramScraping()
+scraper.psuScraping()
+scraper.storageScraping()
+scraper.caseScraping()
+scraper.motherboardScraping()
 scraper.driver.quit()
 scraper.driver = None
 
-#FIX THE parameter issue with categoryUrl
+
 #Fix the scraper
 #Put all stuff in Database
 #Start on build list

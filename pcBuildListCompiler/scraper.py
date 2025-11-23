@@ -92,7 +92,9 @@ class Scraper:
         return links
 
     def extractFromSpecsTable(self, fieldMapping, soup, componentType):
-        componentMapping = fieldMapping.get(componentType.lower())
+        componentMapping = fieldMapping.get(componentType)
+        if not componentMapping:
+            return {}
         specs = {}
         for row in soup.find_all("tr"):
             cells = row.find_all("td")
@@ -100,10 +102,13 @@ class Scraper:
                 continue
             label = cells[0].text.strip()
             value = cells[1].text.strip()
-
             field = componentMapping.get(label)
-            if field:  # Only add if label is mapped
-                specs[field] = value
+            if field:
+                if isinstance(field, list):
+                    for f in field:
+                        specs[f] = value
+                else:
+                    specs[field] = value
         return specs
 
     def getNameNumberPriceUrl(self, link, soup):
@@ -131,8 +136,15 @@ class Scraper:
         return name, partNumber, price, url
 
     def downloadPartImage(self, soup, partNumber, componentSpecificDownloadPath):
-        imageTag = soup.find("img", id = "imgImage") #Gets first image only, select is for css tags
-        imageUrl = imageTag.get("data-src") or imageTag.get("src") #Accounts for if the website ever uses lazy load
+        activeCarousel = soup.find("div", class_="owl-item active") #Was having issues with there being many defined images in soup, but the wanted one is the first active one
+        if activeCarousel:
+            imageTag = activeCarousel.find("img", id="imgImage") #.find only returns first one
+        else:
+            imageTag = soup.find("img", id="imgImage")
+        if not imageTag:
+            imageTag = soup.find("img", id="imgImage") #For the pages with only 1 image
+
+        imageUrl = imageTag.get("data-src") or imageTag.get("src")#Accounts for if the website ever uses lazy load
 
         if imageUrl.startswith("/"):
             imageUrl = self.baseUrl + imageUrl
@@ -140,12 +152,15 @@ class Scraper:
         imageContent = requests.get(imageUrl).content
         imageFile = io.BytesIO(imageContent)
         image = Image.open(imageFile)
+        if image.mode == 'RGBA' or image.mode == "LA":
+            image = image.convert('RGB')
         folder = (f"productImages/{componentSpecificDownloadPath}")
         os.makedirs(folder, exist_ok=True)
-        filePath = os.path.join(folder, f"{partNumber}.jpg")
+        normalisedPartNumber = f"{partNumber.replace('/', '-').replace('\\', '-')}"
+        filePath = os.path.join(folder, f"{normalisedPartNumber}.jpg")
         image.save(filePath, "JPEG")
         print("saved")
-        fileName = f"{partNumber}.jpg"
+        fileName = f"{normalisedPartNumber}.jpg" #Some parts had '/' in the partNumber which messed up filePath, so replace them with a '-'
         return f"productImages/{componentSpecificDownloadPath}/{fileName}"
 
 

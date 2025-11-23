@@ -8,6 +8,7 @@ memory_type_score = {
 }
 
 def normaliseCpuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
+    print(specs)
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
@@ -17,12 +18,15 @@ def normaliseCpuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
         "score": score,
         "coreCount": int(specs["coreCount"].split(" ")[0]),
         "coreClock": float(specs["coreClock"].split(" ")[0]),
+        "boostClock": float(specs["coreClock"].split(" ")[0]),
+        "cache": float(specs["cache"].split(" ")[0]),
+        "threads": int(specs["threads"]),
         "tdpWatts": int(specs["tdp"].split(" ")[0]) if isinstance(specs["tdp"], str) else int(specs["tdp"][0]),
         "socketId": specs["socket"]
     }
     return assignCpuScore(normalisedSpecs)
 
-def normaliseMotherboardScrapedValues(specs, name, manufacturerId, partNumber, price, url):
+def normaliseMotherboardScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
@@ -35,7 +39,7 @@ def normaliseMotherboardScrapedValues(specs, name, manufacturerId, partNumber, p
         "memorySlots": int(specs["memorySlots"].split(" ")[0]),
         "memoryType": specs["memoryType"]
     }
-    return normalisedSpecs
+    return assignMotherBoardScore(normalisedSpecs)
 
 def normaliseRamScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
     normalisedSpecs = {
@@ -61,8 +65,8 @@ def normaliseStorageScrapedValues(specs, name, manufacturerId, partNumber, price
         "url": url,
         "score": score,
         "capacityGb": int(specs["capacityGb"].split(" ")[0]),
-        "readSpeed": float(specs["readSpeed"].replace("Up to ", "").replace(",", "").split()[0]),
-        "writeSpeed": float(specs["writeSpeed"].replace("Up to ", "").replace(",", "").split()[0])
+        "readSpeed": normaliseReadWriteOrRpm(specs["readSpeed"]),
+        "writeSpeed": normaliseReadWriteOrRpm(specs["writeSpeed"])
     }
     return assignStorageScore(normalisedSpecs)
 
@@ -95,23 +99,23 @@ def normaliseGpuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
     }
     return assignGpuScore(normalisedSpecs)
 
-def normaliseCaseScrapedValues(specs, name, manufacturerId, partNumber, price, url):
+def normaliseCaseScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
         "price": price,
         "manufacturerId": manufacturerId,
         "url": url,
+        "score": score,
         "formFactorSupport": specs["formFactorSupport"],
-        "gpuMaxLength": int(specs["gpuMaxLength"].split(" ")[0])
+        "gpuMaxLength": int(specs["gpuMaxLength"].split(" ")[0]),
     }
-    return normalisedSpecs
+    return assignCaseScore(normalisedSpecs)
 
 def normalisePsuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
-    efficiency = specs["efficiencyRating"]
-    if isinstance(efficiency, list):
-        efficiency = efficiency[2] if len(efficiency) > 2 else efficiency[0]
-
+    efficiency = normaliseEfficiencyRating(specs["efficiencyRating"])
+    modularity = specs["modularity"]
+    modular = True if modularity == "Modular" else False
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
@@ -121,7 +125,8 @@ def normalisePsuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
         "score": score,
         "wattage": int(specs["wattage"].split(" ")[0]),
         "efficiencyRating": efficiency,
-        "formFactor": specs["formFactor"]
+        "formFactor": specs["formFactor"],
+        "modular": modular
     }
     return assignPsuScore(normalisedSpecs)
 
@@ -172,3 +177,65 @@ def assignStorageScore(specs):
 
     specs["score"] = round(score, 2)
     return specs
+
+def assignCaseScore(specs):
+    formFactorWeights = {
+        "E-ATX": 3,
+        "ATX": 2,
+        "Micro ATX": 1.5,
+        "Mini ITX": 1
+    }
+    formFactorScore = formFactorWeights.get(specs["formFactorSupport"], 1)
+    gpuScore = specs["gpuMaxLength"] / 10  # scale down length to keep numbers reasonable
+    pricePenalty = specs["price"] * 0.05   # higher price reduces score
+
+    score = formFactorScore * 100 + gpuScore - pricePenalty
+    specs["score"] = round(score, 2)
+    return specs
+
+def assignMotherBoardScore(specs):
+    score = 0
+    specs["score"] = score
+    return specs
+
+def normaliseEfficiencyRating(efficiencyString):
+    if not efficiencyString or not isinstance(efficiencyString, str):
+        return "na"
+
+    rating = efficiencyString.lower().replace("+", "").replace("-", "").strip()
+
+    # Handle 80 Plus ratings
+    if "80 plus" in rating or "80plus" in rating:
+        if "gold" in rating:
+            return "gold"
+        elif "silver" in rating:
+            return "silver"
+        elif "bronze" in rating:
+            return "bronze"
+        elif "platinum" in rating or "titanium" in rating:
+            return "platinum"
+        else:
+            return "na"
+
+    if "eta" in rating: #Apparently for New PSUs there's some cybenetics efficiency rating system also now
+        if "gold" in rating:
+            return "gold"
+        elif "silver" in rating:
+            return "silver"
+        elif "bronze" in rating:
+            return "bronze"
+        elif "platinum" in rating or "titanium" in rating:
+            return "platinum"
+        else:
+            return "na"
+
+    # For the robustness innit
+    return "na"
+
+def normaliseReadWriteOrRpm(speed):
+    value = speed.strip().lower()
+    if "rpm" in value:
+        readOrWrite = round(float("".join(n for n in value if n.isdigit())), 0)
+        return readOrWrite * 0.025  # multiplication factor to approximate MB/s
+    else:
+        return int(''.join(n for n in value if n.isdigit()))
