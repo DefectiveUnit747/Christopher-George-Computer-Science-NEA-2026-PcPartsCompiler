@@ -151,11 +151,12 @@ def assignGpuScore(specs):
 
 def assignPsuScore(specs):
     efficiencyMap = {
-        "Bronze": 1,
-        "Silver": 2,
-        "Gold": 3,
-        "Platinum": 4,
-        "Titanium": 5
+        "na": 0,
+        "bronze": 1,
+        "silver": 2,
+        "gold": 3,
+        "platinum": 4,
+        "titanium": 5
     }
     efficiency_score = efficiencyMap.get(specs["efficiencyRating"], 0)
     score = specs["wattage"] * efficiency_score
@@ -164,14 +165,14 @@ def assignPsuScore(specs):
 
 def assignStorageScore(specs):
     capacity = specs["capacityGb"]
-    read_speed = specs["readSpeed"]
-    write_speed = specs["writeSpeed"]
+    read = specs["readSpeed"]
+    write = specs["writeSpeed"]
     price = specs["price"]
 
     # Weighted scoring formula
     score = (
             capacity * 0.3 +
-            (read_speed + write_speed) * 0.2 -
+            (read + write) * 0.2 -
             price * 0.1
     )
 
