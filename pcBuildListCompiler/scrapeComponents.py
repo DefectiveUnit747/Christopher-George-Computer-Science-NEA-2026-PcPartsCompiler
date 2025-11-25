@@ -238,14 +238,7 @@ class componentScraper(Scraper):
                 print(f"{componentType} failed: {e}")
 
 scraper = componentScraper("https://www.cclonline.com", computerParts)
-scraper.cpuScraping()
-scraper.gpuScraping()
-scraper.ramScraping()
-scraper.psuScraping()
-scraper.storageScraping()
-scraper.caseScraping()
-scraper.motherboardScraping()
-scraper.driver.quit()
+scraper.scrapeAllComponents()
 scraper.driver = None
 
 
