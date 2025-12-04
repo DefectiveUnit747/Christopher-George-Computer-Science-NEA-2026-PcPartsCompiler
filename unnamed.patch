@@ -1,0 +1,141 @@
+Index: pcBuildListCompiler/databasing/databaseFunctions.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pcBuildListCompiler/databasing/databaseFunctions.py b/pcBuildListCompiler/databasing/databaseFunctions.py
+--- a/pcBuildListCompiler/databasing/databaseFunctions.py	
++++ b/pcBuildListCompiler/databasing/databaseFunctions.py	(date 1763338732946)
+@@ -24,15 +24,15 @@
+     },
+     "gpu": {
+         "columns": [
+-            "partNumber", "name", "manufacturerId", "memoryGb", "coreClock",
++            "partNumber", "name", "manufacturerId", "capacityGb", "coreClock",
+             "boostClock", "lengthMm", "tdpWatts", "year", "price", "score"
+         ],
+         "types": {
+-            "memoryGb": int,
++            "capacityGb": int,
+             "coreClock": int,
+             "boostClock": int,
+-            "lengthMm": int,
+-            "tdpWatts": int,
++            "length": int,
++            "tdp": int,
+             "year": int,
+             "price": float,
+             "score": float
+Index: pcBuildListCompiler/scrapingTools/scrapeComponents.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pcBuildListCompiler/scrapingTools/scrapeComponents.py b/pcBuildListCompiler/scrapingTools/scrapeComponents.py
+--- a/pcBuildListCompiler/scrapingTools/scrapeComponents.py	
++++ b/pcBuildListCompiler/scrapingTools/scrapeComponents.py	(date 1763402342517)
+@@ -33,14 +33,27 @@
+             },
+ 
+             "gpu": {
+-                "Chipset Manufacturer": "manufacturer",
+-                "Memory Size": "memoryGb",
++                # Memory
++                "Memory Size": "capacityGb",
++                "Graphics Memory Size": "capacityGb",
+                 "Memory Type": "memoryType",
+-                "Depth": "length",
+-                "Number of Cores": "coreCount",
+-                "Power Consumption": "tdp",
++                "Graphics Memory Type": "memoryType",
++
++                # Clocks
+                 "Base Chip Clock": "coreClock",
+-            },
++                "Core Clock": "coreClock",
++                "Boost Chip Clock": "boostClock",
++
++                # Power
++                "Power Consumption": "tdp",
++                "GPU Power (TDP)": "tdp",
++                "Power Requirement (auto)": "tdp",
++
++                # Physical dimensions
++                "Depth": "length",
++                "GPU Length": "length",
++            }
++            ,
+ 
+             "psu": {
+                 "Manufacturer": "manufacturer",
+Index: pcBuildListCompiler/scrapingTools/dataNormalisationFunctions.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pcBuildListCompiler/scrapingTools/dataNormalisationFunctions.py b/pcBuildListCompiler/scrapingTools/dataNormalisationFunctions.py
+--- a/pcBuildListCompiler/scrapingTools/dataNormalisationFunctions.py	
++++ b/pcBuildListCompiler/scrapingTools/dataNormalisationFunctions.py	(date 1763402342508)
+@@ -65,7 +65,7 @@
+ 
+ def normaliseGpuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
+     print(specs)
+-    mem = int(specs["capacityGb"].split(" ")[0])
++    mem = int(specs["memoryGb"].split(" ")[0])
+     memInGb = math.floor(mem / 10**(math.floor(math.log10(mem)) - 1)) * 10**(math.floor(math.log10(mem)) - 1)
+     normalisedSpecs = {
+         "partNumber": partNumber,
+@@ -77,7 +77,7 @@
+         "capacityGb": memInGb,
+         "coreClock": int(specs["coreClock"].split(" ")[0]),
+         "memoryType": specs["memoryType"],
+-        "tdp": int(specs["tdp"].split(" ")[0]),
++        "tdp": int(specs["tdpWatts"].split(" ")[0]),
+         "length": int(specs["length"].split(" ")[0])}
+     return assignGpuScore(normalisedSpecs)
+ 
+diff --git a/pcBuildListCompiler/scrapingTools/computerParts.db b/pcBuildListCompiler/scrapingTools/computerParts.db
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..80808b1faa86ddeba152c8f1a4574b058f5d7ee3
+GIT binary patch
+literal 81920
+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
+
