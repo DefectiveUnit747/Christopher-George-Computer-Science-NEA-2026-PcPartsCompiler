@@ -27,6 +27,7 @@ class Database:
             )
             ''')
 
+            # CPU table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS cpu (
                 partNumber TEXT PRIMARY KEY,
@@ -35,9 +36,10 @@ class Database:
                 manufacturerId INTEGER,
                 url TEXT,
                 score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 coreCount INTEGER,
                 coreClock REAL,
-                boostClock REAL,
                 cache INTEGER,
                 threads INTEGER,
                 tdpWatts INTEGER,
@@ -47,6 +49,7 @@ class Database:
             )
             ''')
 
+            # Motherboard table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS motherboard (
                 partNumber TEXT PRIMARY KEY,
@@ -54,7 +57,9 @@ class Database:
                 price REAL,
                 manufacturerId INTEGER,
                 url TEXT,
-                score INTEGER,
+                score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 socketId TEXT,
                 formFactor TEXT,
                 chipset TEXT,
@@ -70,6 +75,7 @@ class Database:
             )
             ''')
 
+            # RAM table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS ram (
                 partNumber TEXT PRIMARY KEY,
@@ -78,6 +84,8 @@ class Database:
                 manufacturerId INTEGER,
                 url TEXT,
                 score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 capacityGb INTEGER,
                 numberOfModules INTEGER,
                 speedMhz INTEGER,
@@ -87,6 +95,7 @@ class Database:
             )
             ''')
 
+            # Storage table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS storage (
                 partNumber TEXT PRIMARY KEY,
@@ -95,6 +104,8 @@ class Database:
                 manufacturerId INTEGER,
                 url TEXT,
                 score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 capacityGb INTEGER,
                 readSpeed REAL,
                 writeSpeed REAL,
@@ -104,6 +115,7 @@ class Database:
             )
             ''')
 
+            # GPU table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS gpu (
                 partNumber TEXT PRIMARY KEY,
@@ -112,6 +124,8 @@ class Database:
                 manufacturerId INTEGER,
                 url TEXT,
                 score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 memoryGb INTEGER,
                 coreClock REAL,
                 memoryType TEXT,
@@ -122,6 +136,7 @@ class Database:
             )
             ''')
 
+            # PSU table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS psu (
                 partNumber TEXT PRIMARY KEY,
@@ -130,6 +145,8 @@ class Database:
                 manufacturerId INTEGER,
                 url TEXT,
                 score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 wattage INTEGER,
                 efficiencyRating TEXT,
                 formFactor TEXT,
@@ -139,6 +156,7 @@ class Database:
             )
             ''')
 
+            # Case table
             self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS cases (
                 partNumber TEXT PRIMARY KEY,
@@ -146,7 +164,9 @@ class Database:
                 price REAL,
                 manufacturerId INTEGER,
                 url TEXT,
-                score INTEGER,
+                score REAL,
+                scoreEfficiency REAL,
+                scoreUpgradeability REAL,
                 formFactorSupport TEXT,
                 gpuMaxLength INTEGER,
                 imagePath TEXT,

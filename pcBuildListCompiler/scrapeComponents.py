@@ -170,8 +170,8 @@ class componentScraper(Scraper):
 
                     specs = self.extractFromSpecsTable(fieldMapping, soup, componentTableName)
 
-                    if not specs:
-                        print("  No specs")
+                    if not specs or None in specs.values():
+                        print("No specs or value missing")
                         continue
 
                     manufacturerId = self.manufacturerMap.get(specs.get("manufacturer", "").lower()) if specs.get(
@@ -183,7 +183,6 @@ class componentScraper(Scraper):
                     imagePath = self.downloadPartImage(soup, partNumber, imageFolder)
                     if imagePath:
                         normalisedComponent["imagePath"] = imagePath
-                    normalisedComponent["imagePath"] = imagePath
                     self.database.insertComponent(componentTableName, normalisedComponent)
                     print(f"  {name}")
 
@@ -201,54 +200,52 @@ class componentScraper(Scraper):
             raise e
 
     def cpuScraping(self):
+        self.driver = self._initialiseDriver()#
         self.categoryUrl = finalFullComponentMap["cpu"]["categoryUrl"]
         self.genericComponentScraper(normaliseCpuScrapedValues, "cpu")
 
     def gpuScraping(self):
+        self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["gpu"]["categoryUrl"]
         self.genericComponentScraper(normaliseGpuScrapedValues, "gpu")
 
     def ramScraping(self):
+        self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["ram"]["categoryUrl"]
         self.genericComponentScraper(normaliseRamScrapedValues, "ram")
 
     def psuScraping(self):
+        self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["psu"]["categoryUrl"]
         self.genericComponentScraper(normalisePsuScrapedValues, "psu")
 
     def storageScraping(self):
         for i in finalFullComponentMap["storage"]["categoryUrl"]:
+            self.driver = self._initialiseDriver()
             self.categoryUrl = i
             self.genericComponentScraper(normaliseStorageScrapedValues, "storage")
 
     def caseScraping(self):
+        self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["cases"]["categoryUrl"]
         self.genericComponentScraper(normaliseCaseScrapedValues, "cases")
 
     def motherboardScraping(self):
+        self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["motherboard"]["categoryUrl"]
         self.genericComponentScraper(normaliseMotherboardScrapedValues, "motherboard")
 
     def scrapeAllComponents(self):
         for componentType, config in finalFullComponentMap.items():
             try:
+                self.driver = self._initialiseDriver()
                 self.categoryUrl = config["categoryUrl"]
                 self.genericComponentScraper(config["normalizer"], config["table"])
             except Exception as e:
                 print(f"{componentType} failed: {e}")
 
 scraper = componentScraper("https://www.cclonline.com", computerParts)
-scraper.cpuScraping()
-scraper.gpuScraping()
-scraper.ramScraping()
-scraper.psuScraping()
-scraper.storageScraping()
-scraper.caseScraping()
-scraper.motherboardScraping()
+scraper.ramScraping() #USE SCRAPE ALL COMPONENTS
+#scraper.scrapeAllComponents()
 scraper.driver.quit()
 scraper.driver = None
-
-
-#Fix the scraper
-#Put all stuff in Database
-#Start on build list

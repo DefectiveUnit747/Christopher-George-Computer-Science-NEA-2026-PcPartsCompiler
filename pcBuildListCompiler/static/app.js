@@ -6,11 +6,11 @@ function selectBrand(brand) {
     if (selectedBtn) selectedBtn.classList.add("selected");
 }
 
-function saveValues(budgetValue, aestheticsValue, futureValue) {
+function saveValues(budgetValue, efficiencyValue, futureValue) {
     const selectedBrand = document.querySelector(".button-group button.selected")?.dataset.brand;
     const valuesToSave = {
         budget: budgetValue,
-        aesthetics: aestheticsValue,
+        aesthetics: efficiencyValue,
         futurePref: futureValue,
         gpuPreference: selectedBrand
     };
@@ -31,8 +31,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const budgetSlider = document.getElementById("budgetSlider"); //Actual slider
     const budgetValue = document.getElementById("budgetValue"); //Value of the slider
-    const aestheticSlider = document.getElementById("aestheticSlider");
-    const aestheticsValue = document.getElementById("aestheticsValue")
+    const efficiencySlider = document.getElementById("efficiencySlider");
+    const efficiencyValue = document.getElementById("efficiencyValue")
     const futureSlider = document.getElementById("futureSlider")
     const futureValue = document.getElementById("futureValue")
 
@@ -45,9 +45,9 @@ document.addEventListener("DOMContentLoaded", () => {
         budgetValue.textContent = budgetSlider.value;
     }); //The value dynamically shows as the slider is used
 
-    aestheticsValue.textContent  = aestheticSlider.value;
-    aestheticSlider.addEventListener("input", () => {
-        aestheticsValue.textContent = aestheticSlider.value;
+    efficiencyValue.textContent  = efficiencySlider.value;
+    efficiencySlider.addEventListener("input", () => {
+        efficiencyValue.textContent = efficiencySlider.value;
     });
 
     futureValue.textContent = futureSlider.value;
@@ -109,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const budget = budgetSlider.value;
-        const aesthetics = aestheticSlider.value;
+        const aesthetics = efficiencySlider.value;
         const future = futureSlider.value;
 
         saveValues(budget, aesthetics, future)
