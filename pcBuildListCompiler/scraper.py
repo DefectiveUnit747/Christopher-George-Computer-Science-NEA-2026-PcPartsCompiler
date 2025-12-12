@@ -4,6 +4,9 @@ import requests
 from PIL import Image
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 import logging
 import os
 
@@ -41,31 +44,25 @@ class Scraper:
 
         self.requests_session = session
 
+    def acceptCookies(self):
+        try:
+            WebDriverWait(self.driver, 5).until(
+                EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
+            ).click()
+        except:
+            pass
+
     def getProductLinks(self):
         links = set()
         try:
             self.driver.get(self.baseUrl + self.categoryUrl)
             time.sleep(2)
+            self.acceptCookies()
 
-            # Dismiss cookie banner
-            try:
-                from selenium.webdriver.common.by import By
-                accept_btn = self.driver.find_element(By.ID, "onetrust-accept-btn-handler")
-                accept_btn.click()
-                time.sleep(1)
-            except:
-                pass
-
-            soup = BeautifulSoup(self.driver.page_source, "html.parser")
-            pageItems = soup.find_all("li", class_="notSelected")
-            if len(pageItems) >= 2:
-                lastPage = int(pageItems[-2].text.strip())
-            else:
-                lastPage = 1
-
-            for page in range(1, lastPage + 1):
+            while True:
                 soup = BeautifulSoup(self.driver.page_source, "html.parser")
 
+                # Get links from current page
                 container = soup.find("div", class_="productListContainer")
                 if container:
                     for link in container.find_all("a", href=True):
@@ -76,19 +73,23 @@ class Scraper:
                             continue
                         links.add(self.baseUrl + href)
 
-                if page < lastPage:
-                    from selenium.webdriver.common.by import By
-                    # Scroll to pagination first
-                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                # Try to find the "next" button
+                from selenium.webdriver.common.by import By
+                try:
+                    next_button = self.driver.find_element(By.LINK_TEXT, "Next")
+                    # Scroll down so the button is visible
+                    self.driver.execute_script("arguments[0].scrollIntoView();", next_button)
                     time.sleep(0.5)
-
-                    next_link = self.driver.find_element(By.LINK_TEXT, str(page + 1))
-                    next_link.click()
+                    next_button.click()
                     time.sleep(1)
+                except:
+                    # No "Next" button → last page reached
+                    break
 
         except Exception as e:
             print(f"Failed to get product links: {e}")
-        print(links)
+
+        print(f"Collected {len(links)} links")
         return links
 
     def extractFromSpecsTable(self, fieldMapping, soup, componentType):
@@ -136,15 +137,16 @@ class Scraper:
         return name, partNumber, price, url
 
     def downloadPartImage(self, soup, partNumber, componentSpecificDownloadPath):
-        activeCarousel = soup.find("div", class_="owl-item active") #Was having issues with there being many defined images in soup, but the wanted one is the first active one
+        activeCarousel = soup.find("div",
+                                   class_="owl-item active")  # Was having issues with there being many defined images in soup, but the wanted one is the first active one
         if activeCarousel:
-            imageTag = activeCarousel.find("img", id="imgImage") #.find only returns first one
+            imageTag = activeCarousel.find("img", id="imgImage")  # .find only returns first one
         else:
             imageTag = soup.find("img", id="imgImage")
         if not imageTag:
-            imageTag = soup.find("img", id="imgImage") #For the pages with only 1 image
+            imageTag = soup.find("img", id="imgImage")  # For the pages with only 1 image
 
-        imageUrl = imageTag.get("data-src") or imageTag.get("src")#Accounts for if the website ever uses lazy load
+        imageUrl = imageTag.get("data-src") or imageTag.get("src")  # Accounts for if the website ever uses lazy load
 
         if imageUrl.startswith("/"):
             imageUrl = self.baseUrl + imageUrl
@@ -160,7 +162,7 @@ class Scraper:
         filePath = os.path.join(folder, f"{normalisedPartNumber}.jpg")
         image.save(filePath, "JPEG")
         print("saved")
-        fileName = f"{normalisedPartNumber}.jpg" #Some parts had '/' in the partNumber which messed up filePath, so replace them with a '-'
+        fileName = f"{normalisedPartNumber}.jpg"  # Some parts had '/' in the partNumber which messed up filePath, so replace them with a '-'
         return f"productImages/{componentSpecificDownloadPath}/{fileName}"
 
 

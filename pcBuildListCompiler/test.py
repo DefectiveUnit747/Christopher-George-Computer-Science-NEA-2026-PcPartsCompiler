@@ -2,9 +2,10 @@ import sqlite3
 conn = sqlite3.connect("computerParts.db")
 c = conn.cursor()
 
-def droptable():
+def droptable(names):
     conn = sqlite3.connect("computerParts.db")
     c = conn.cursor()
-    c.execute(""" DROP TABLE cpu""")
+    for n in names:
+        c.execute(f""" DROP TABLE {n}""")
     print("done")
-droptable()
+droptable(["cpu", "gpu", "ram", "motherboard", "storage", "psu", "cases"])

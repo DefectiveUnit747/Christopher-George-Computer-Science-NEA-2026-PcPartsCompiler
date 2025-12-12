@@ -2,9 +2,35 @@ import math
 
 gpuMemoryTypeScore = {
     "GDDR5": 1,
+    "GDDR5X": 1.5,  # Standard ones
     "GDDR6": 2,
     "GDDR6X": 3,
-    "GDDR7": 4
+    "GDDR7": 4,
+    "HBM": 2.5,     # High Bandwidth Memory niche vega stuf typical AMD
+    "HBM2": 3,
+    "HBM2E": 3.5,
+    "HBM3": 4
+}
+ddrScores = {"DDR3": 5, "DDR4": 15, "DDR5": 20}
+efficiencyMap = {
+    "na": {"performance": 0, "efficiency": 0},
+    "bronze": {"performance": 15, "efficiency": 35},
+    "silver": {"performance": 25, "efficiency": 50},
+    "gold": {"performance": 30, "efficiency": 65},
+    "platinum": {"performance": 35, "efficiency": 85},
+    "titanium": {"performance": 40, "efficiency": 100}
+} #The 80+ efficiency will have different weights when I calculate the score vs the efficiency score, so there is a dictionary for each efficiency tier
+
+formFactorWeights = {
+    "EATX": 4,
+    "E-ATX": 4,
+    "XL-ATX": 4,
+    "ATX": 3,
+    "mATX": 2,
+    "Micro ATX": 2, #Got Worded versions asw in case of inconsistency across site
+    "Micro-ATX": 2,
+    "Mini ITX": 1,
+    "Mini-ITX": 1,
 }
 
 def normaliseCpuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
@@ -41,7 +67,8 @@ def normaliseMotherboardScrapedValues(specs, name, manufacturerId, partNumber, p
         "formFactor": specs["formFactor"],
         "tdpWatts": int(specs["tdp"].split(" ")[0]) if isinstance(specs["tdp"], str) else int(specs["tdp"][0]),
         "memorySlots": int(specs["memorySlots"].split(" ")[0]),
-        "memoryType": specs["memoryType"]
+        "memoryType": (specs["memoryType"])[:4],
+        "maxMemory": int(specs["maxMemory"].split(" ")[0])
     }
     return assignMotherBoardScore(normalisedSpecs)
 
@@ -83,6 +110,7 @@ def normaliseGpuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
     mem = int(specs["memoryGb"].split(" ")[0])
     memInGb = (math.floor(mem / 10 ** (math.floor(math.log10(mem)) - 1)) * 10 ** (math.floor(math.log10(mem)) - 1))//1000
     coreClockBeforeNormalisation = specs["coreClock"].split(" ")
+    coreClock = None
     for word in coreClockBeforeNormalisation:
         if word.isdigit():
             coreClock = int(word)
@@ -147,78 +175,119 @@ def normalisePsuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
 #######################################################################################################################################
 
 def assignCpuScore(specs, maximum = 50):
-    normalScore = round(((math.log1p(specs["coreCount"]**0.8 + specs["coreClock"]**1.2)) / math.log1p(maximum)) * 100)
-    scoreEfficiency = normalScore / specs["tdpWatts"]
-    scoreEfficiency = round(scoreEfficiency * math.e**(-0.002 * specs["tdpWatts"]) / math.log1p(maximum) * 100)
-    sigmoidCoreCount = tanhSigmoidScaling(specs["coreCount"], 8, 4)
-    sigmoidCache = tanhSigmoidScaling(specs["cache"], 16, 8)
-    scoreUpgradeability = round(harmonicMean([sigmoidCoreCount, sigmoidCache]))
-    specs["score"] = normalScore
-    specs["scoreEfficiency"] = scoreEfficiency
-    specs["scoreUpgradeability"] = scoreUpgradeability
-    return specs
+    coreCount = specs["coreCount"]
+    coreClock = specs["coreClock"]
+    cache = specs["cache"]
+    tdp = specs["tdpWatts"]
+    threads = specs["threads"]
 
-def assignRamScore(specs, maximum = 5000000):
-    normalScore = round((math.log1p(specs["capacityGb"] * specs["speedMhz"]) / math.log1p(maximum)) * 100)
-    scoreEfficiency = 0
-    moduleScore = 100 - (specs["numberOfModules"] * 25)
-    capacityScore = tanhSigmoidScaling(specs["capacityGb"], 32, 16)
-    scoreUpgradeability = round(harmonicMean([max(moduleScore, 10), capacityScore]))
+    rawPerformanceScore = coreCount * coreClock
+    performance = featureScaling(rawPerformanceScore, 10, 200, 70)
+    threadBonus = featureScaling(threads / max(coreCount, 1), 1.0, 2.0, 30)
+    normalScore = max(0, min(100, round(performance + threadBonus)))
 
-    specs["score"] = normalScore
-    specs["scoreEfficiency"] = scoreEfficiency
-    specs["scoreUpgradeability"] = scoreUpgradeability
-    return specs
+    perfPerWatt = rawPerformanceScore / max(tdp, 1)
+    scaledEfficiency = featureScaling(perfPerWatt, 0.15, 2.5, 100)
+    penaltyForTdp = exponentialDecay(tdp, 0.002)
+    scoreEfficiency = round(max(0, min(100, scaledEfficiency * penaltyForTdp)))
 
-def assignGpuScore(specs, maximum = 1000000):
-    memScore = gpuMemoryTypeScore.get(specs["memoryType"], 0)
-    rawScore = specs["memoryGb"] * specs["coreClock"] + memScore * 1000
-    normalScore = round((math.log1p(rawScore) / math.log1p(maximum)) * 100)
-    perfPerWatt = rawScore / specs["tdpWatts"]
-    scoreEfficiency = round(min((perfPerWatt) * math.exp(-0.005 * specs["tdpWatts"]), 100))
-    memoryScore = tanhSigmoidScaling(specs["memoryGb"], 12, 6)
-    memTypeScore = memScore * 20
-    scoreUpgradeability = round(harmonicMean([memoryScore, memTypeScore]))
+    coreUpgrade = tanhSigmoidScaling(coreCount, midpoint=16, scaleFactor=8)
+    cacheUpgrade = tanhSigmoidScaling(cache, midpoint=48, scaleFactor=24)
+    scoreUpgradeability = max(0, min(100, round((coreUpgrade + cacheUpgrade) / 2)))
 
     specs["score"] = normalScore
     specs["scoreEfficiency"] = scoreEfficiency
     specs["scoreUpgradeability"] = scoreUpgradeability
     return specs
 
-def assignPsuScore(specs, maximum = 20000):
-    efficiencyMap = {
-        "na": 1,
-        "Bronze": 2,
-        "Silver": 3,
-        "Gold": 4,
-        "Platinum": 5,
-        "Titanium": 6
-    }
-    efficiencyRating = efficiencyMap.get(specs["efficiencyRating"].lower(), 1)
-    normalScore = round((math.log1p(specs["wattage"]) / math.log1p(maximum)) * 100)
-    scoreEfficiency = round(efficiencyRating * 16.67)
-
-    wattageScore = tanhSigmoidScaling(specs["wattage"], 750, 200)
-    modularScore = 100 if specs["modular"] else 50  # modular = easier cable management
-    scoreUpgradeability = round(harmonicMean([wattageScore, modularScore]))
-
-    specs["score"] = normalScore
-    specs["scoreEfficiency"] = scoreEfficiency
-    specs["scoreUpgradeability"] = scoreUpgradeability
-    return specs
-
-def assignStorageScore(specs, maximum = 1000000):
+def assignRamScore(specs):
     capacity = specs["capacityGb"]
-    read_speed = specs["readSpeed"]
-    write_speed = specs["writeSpeed"]
+    ddrType = specs["ddrType"]
+    numberOfModules = specs["numberOfModules"]
+    speed = specs["speedMhz"]
 
-    rawScore = capacity * 0.5 + (read_speed + write_speed) * 0.25
-    normalScore = round((math.log1p(rawScore) / math.log1p(maximum)) * 100)
+    capacityScore = featureScaling(capacity, 4, 128, 40)
+    speedScore = featureScaling(speed, 1600, 8000, 40)
+    ddrScore = ddrScores.get(ddrType, 10)
+    normalScore = max(0, min(100, round(capacityScore + speedScore + ddrScore)))
+
+    scoreEfficiency = 0  # Not applicable
+
+    capacityUpgrade = tanhSigmoidScaling(capacity, midpoint=32, scaleFactor=16)
+    moduleUpgrade = featureScaling(4 - numberOfModules, 0, 3, 100)  # Fewer modules = more slots free, 4 is max, hence 4 minus
+    scoreUpgradeability = max(0, min(100, round((capacityUpgrade + moduleUpgrade) / 2)))
+
+
+    specs["score"] = normalScore
+    specs["scoreEfficiency"] = scoreEfficiency
+    specs["scoreUpgradeability"] = scoreUpgradeability
+    return specs
+
+def assignGpuScore(specs):
+    memoryGb = specs["memoryGb"]
+    coreClock = specs["coreClock"]
+    memoryType = specs["memoryType"]
+    tdp = specs["tdpWatts"]
+
+    memoryTypeScore = gpuMemoryTypeScore.get(memoryType, 2)
+    rawPerformanceScore = memoryGb * coreClock * memoryTypeScore
+    normalScore = max(0, min(100, round(featureScaling(rawPerformanceScore, 2000, 180000, 100))))
+    #The 180000 is the max theoretical product of the 3 things above, well for consumer grade excluding stuff like the nividia pro ai cards
+
+    perfPerWatt = rawPerformanceScore / max(tdp, 1)
+    scaledEfficiency = featureScaling(perfPerWatt, 20, 1200, 100)
+    tdpPenalty = exponentialDecay(tdp, 0.0025)
+    scoreEfficiency = max(0, min(100, round(scaledEfficiency * tdpPenalty)))
+
+    memoryHeadroom = tanhSigmoidScaling(memoryGb, 12, 6)
+    memoryTypeBonus = featureScaling(memoryTypeScore, 1, 4, 100)
+    scoreUpgradeability = max(0, min(100, round((memoryHeadroom * 0.6) + (memoryTypeBonus * 0.4))))
+
+    specs["score"] = normalScore
+    specs["scoreEfficiency"] = scoreEfficiency
+    specs["scoreUpgradeability"] = scoreUpgradeability
+    return specs
+
+def assignPsuScore(specs):
+    wattage = specs["wattage"]
+    efficiencyRating = specs["efficiencyRating"]
+    modular = specs["modular"]
+
+    wattageScore = featureScaling(wattage, 300, 1600, 60)
+    effScore = efficiencyMap.get(str(efficiencyRating).lower(), 10)
+    performanceEfficiencyScore = effScore["performance"]
+    efficiencyEfficiencyScore = effScore["efficiency"]
+    normalScore = max(0, min(100, round(wattageScore + performanceEfficiencyScore)))
+
+    efficiencyNormalized = efficiencyEfficiencyScore
+
+    tdpPenalty = exponentialDecay(wattage, 0.0015)
+    scoreEfficiency = max(0, min(100, round(efficiencyNormalized * tdpPenalty)))
+
+    wattageUpgrade = tanhSigmoidScaling(wattage, midpoint=850, scaleFactor=300)
+    modularUpgrade = 100 if modular else 50
+    scoreUpgradeability = max(0, min(100, round((wattageUpgrade * 0.6) + (modularUpgrade * 0.4))))
+
+    specs["score"] = normalScore
+    specs["scoreEfficiency"] = scoreEfficiency
+    specs["scoreUpgradeability"] = scoreUpgradeability
+    return specs
+
+def assignStorageScore(specs):
+    capacity = specs["capacityGb"]
+    readSpeed = specs["readSpeed"]
+    writeSpeed = specs["writeSpeed"]
+    avgSpeed = (readSpeed + writeSpeed) // 2
+
+    speedScore = featureScaling(avgSpeed, 100, 7000, 70)
+    capacityScore = featureScaling(capacity, 256, 4000, 30)
+    normalScore = max(0, min(100, round(speedScore + capacityScore)))
+
     scoreEfficiency = 0
 
-    capacityScore = tanhSigmoidScaling(capacity, 2000, 1000)
-    speedScore = tanhSigmoidScaling((read_speed + write_speed) / 2, 3000, 1500)
-    scoreUpgradeability = round(harmonicMean([capacityScore, speedScore]))
+    capacityUpgrade = tanhSigmoidScaling(capacity, midpoint=2000, scaleFactor=1000)
+    speedUpgrade = tanhSigmoidScaling(avgSpeed, midpoint=3500, scaleFactor=1750)
+    scoreUpgradeability = max(0, min(100, round((capacityUpgrade + speedUpgrade) / 2)))
 
     specs["score"] = normalScore
     specs["scoreEfficiency"] = scoreEfficiency
@@ -226,39 +295,37 @@ def assignStorageScore(specs, maximum = 1000000):
     return specs
 
 def assignCaseScore(specs):
-    formFactorWeights = {
-        "E-ATX": 4,
-        "ATX": 3,
-        "Micro ATX": 2,
-        "Mini ITX": 1
-    }
-    formFactorScore = formFactorWeights.get(specs["formFactorSupport"], 2)
+    formFactor = specs["formFactorSupport"]
+    gpuMaxLength = specs["gpuMaxLength"]
 
-    normalScore = round(formFactorScore * 20 + specs["gpuMaxLength"] * 0.15)
+    formFactorScore = formFactorWeights.get(formFactor, 2)
+    gpuClearanceScore = tanhSigmoidScaling(gpuMaxLength, 350, 100)
+    normalScore = max(0, min(100, round((formFactorScore / 4 * 40) + (gpuClearanceScore * 0.6))))
 
     scoreEfficiency = 0
 
-    formFactorUpgrade = formFactorScore * 25
-    gpuClearanceScore = tanhSigmoidScaling(specs["gpuMaxLength"], 350, 100)
-    scoreUpgradeability = round(harmonicMean([formFactorUpgrade, gpuClearanceScore]))
+    formFactorUpgrade = tanhSigmoidScaling(formFactorScore * 25, 75, 25)  # scaled to 0–100
+    gpuUpgrade = gpuClearanceScore  # already scaled to 0–100
+    scoreUpgradeability = max(0, min(100, round((formFactorUpgrade + gpuUpgrade) / 2)))
 
     specs["score"] = normalScore
     specs["scoreEfficiency"] = scoreEfficiency
     specs["scoreUpgradeability"] = scoreUpgradeability
     return specs
 
-def assignMotherBoardScore(specs, maximum=100):
-    memoryScore = specs["memorySlots"] * 10
-    connectivityScore = (specs.get("pcieSlots", 0) * 5 +
-                         specs.get("m2Slots", 0) * 10 +
-                         specs.get("sataPorts", 0) * 2)
-    normalScore = round(min(memoryScore + connectivityScore, 100))
+def assignMotherBoardScore(specs):
+    ramSlots = specs["memorySlots"]
+    maxMemory = specs["maxMemory"]
+
+    ramScore = featureScaling(ramSlots, 2, 8, 50)  # up to 50% for both, equal weighting given
+    memoryCapacityScore = featureScaling(maxMemory, 16, 256, 50)
+    normalScore = max(0, min(100, round(ramScore + memoryCapacityScore)))
 
     scoreEfficiency = 0
 
-    ramSlotScore = tanhSigmoidScaling(specs["memorySlots"], 4, 2)
-    expansionScore = tanhSigmoidScaling(specs.get("m2Slots", 0), 3, 1.5)
-    scoreUpgradeability = round(harmonicMean([ramSlotScore, expansionScore]))
+    ramUpgrade = tanhSigmoidScaling(ramSlots, midpoint=4, scaleFactor=2)
+    memoryUpgrade = tanhSigmoidScaling(maxMemory, midpoint=128, scaleFactor=64)
+    scoreUpgradeability = max(0, min(100, round((ramUpgrade + memoryUpgrade) / 2)))
 
     specs["score"] = normalScore
     specs["scoreEfficiency"] = scoreEfficiency
@@ -308,8 +375,15 @@ def normaliseReadWriteOrRpm(speed):
         return int(''.join(n for n in value if n.isdigit()))
 
 def tanhSigmoidScaling(attribute, midpoint, scaleFactor):
-    score = (math.tanh((attribute - midpoint) / scaleFactor)+1)/2 *100 #add 1 divide by 2 adjusts the range of the tanh(x) graph from -1->1 to 0 --> 1
+    score = (math.tanh((attribute - midpoint) / scaleFactor) + 1) / 2 *100 #add 1 divide by 2 adjusts the range of the tanh(x) graph from -1->1 to 0 --> 1
     return score #Midpoint is like the average value of that attribute. The scale factor is how steep the curve is, so if there is a steeper curve, greater increase in score for same increment
 
-def harmonicMean(attributes):
-    return len(attributes) / sum(1.0/x for x in attributes)
+def exponentialDecay(value, decayRate):
+    return math.exp(-decayRate * value)
+
+def featureScaling(value, minValue, maxValue, maxScore): #MaxScore is like the proportion of the total that this specific thing will get, so if 50, accounts for 50% of the score's weighting
+    if value <= minValue:
+        return 0
+    if value >= maxValue:
+        return maxScore
+    return ((value - minValue) / (maxValue - minValue)) * maxScore

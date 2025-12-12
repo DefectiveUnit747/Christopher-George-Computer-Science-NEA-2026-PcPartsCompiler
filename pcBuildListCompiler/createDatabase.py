@@ -1,7 +1,7 @@
 import sqlite3
+import os
 
 manufacturers = [
-
     "ADATA", "Aerocool", "AMD", "Antec", "ASRock", "ASUS", "be quiet!", "Biostar", "CaseLabs", "Colorful",
     "Cooler Master", "Corsair", "Cougar", "Crucial", "Deepcool", "ECS", "Enermax", "EVGA", "Foxconn", "Fractal Design",
     "Gainward", "GALAX", "Gigabyte", "G.Skill", "HIS", "Hitachi", "In Win", "Inno3D", "Intel", "Kingston",
@@ -18,165 +18,10 @@ class Database:
 
     def createDatabaseTables(self):
         try:
-            self.cursor.execute("DROP TABLE IF EXISTS pcCase;")
-
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS manufacturer (
-                manufacturerId INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            )
-            ''')
-
-            # CPU table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cpu (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                coreCount INTEGER,
-                coreClock REAL,
-                cache INTEGER,
-                threads INTEGER,
-                tdpWatts INTEGER,
-                socketId TEXT,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            # Motherboard table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS motherboard (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                socketId TEXT,
-                formFactor TEXT,
-                chipset TEXT,
-                tdpWatts INTEGER,
-                memorySlots INTEGER,
-                memoryType TEXT,
-                maxMemoryGb INTEGER,
-                pcieSlots INTEGER,
-                m2Slots INTEGER,    
-                sataPorts INTEGER,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            # RAM table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ram (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                capacityGb INTEGER,
-                numberOfModules INTEGER,
-                speedMhz INTEGER,
-                ddrType TEXT,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            # Storage table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS storage (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                capacityGb INTEGER,
-                readSpeed REAL,
-                writeSpeed REAL,
-                formFactor TEXT,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            # GPU table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS gpu (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                memoryGb INTEGER,
-                coreClock REAL,
-                memoryType TEXT,
-                tdpWatts INTEGER,
-                lengthMm INTEGER,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            # PSU table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS psu (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                wattage INTEGER,
-                efficiencyRating TEXT,
-                formFactor TEXT,
-                modular BOOLEAN,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            # Case table
-            self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cases (
-                partNumber TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                price REAL,
-                manufacturerId INTEGER,
-                url TEXT,
-                score REAL,
-                scoreEfficiency REAL,
-                scoreUpgradeability REAL,
-                formFactorSupport TEXT,
-                gpuMaxLength INTEGER,
-                imagePath TEXT,
-                FOREIGN KEY (manufacturerId) REFERENCES manufacturer(manufacturerId)
-            )
-            ''')
-
-            self.conn.commit()
-            print("Database tables created successfully.")
-
+            with open("schema.sql", "r") as file:
+                self.cursor.executescript(file.read())
+                self.conn.commit()
+                print("Database Tables Successfully Created")
         except sqlite3.Error as e:
             print(f"Database error: {e}")
 

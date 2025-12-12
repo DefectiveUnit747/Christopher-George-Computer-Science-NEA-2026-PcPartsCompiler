@@ -1,17 +1,17 @@
-from createDatabase import *
+from pcBuildListCompiler.createDatabase import *
 from scraper import Scraper
 from bs4 import BeautifulSoup
 import time
 import random
-from dataNormalisationFunctions import *
+from pcBuildListCompiler.dataNormalisationFunctions import *
 #ADD IN LOGGING
 
 manufacturers = [
     "ADATA", "Aerocool", "AMD", "Antec", "ASRock", "ASUS", "be quiet!", "Biostar",
-    "CaseLabs", "Colorful", "Cooler Master", "Corsair", "Cougar", "Crucial",
-    "Deepcool", "ECS", "Enermax", "EVGA", "Foxconn", "Fractal Design", "Gainward",
-    "GALAX", "Gigabyte", "G.Skill", "HIS", "Hitachi", "In Win", "Inno3D", "Intel",
-    "Kingston", "Lian Li", "Matrox", "MSI", "Mushkin", "NVIDIA", "NZXT", "Palit",
+    "CaseLabs", "CiT", "Colorful", "Cooler Master", "Corsair", "Cougar", "Crucial",
+    "Deepcool", "ECS", "Enermax", "EVGA", "Foxconn", "Fractal", "Gainward",
+    "GALAX", "Gigabyte", "G.Skill", "HAVN", "HIS", "Hyte", "Hitachi", "In Win", "Inno3D", "Intel",
+    "Kingston", "Lian Li", "Matrox", "Montech", "MSI", "Mushkin", "NVIDIA", "NZXT", "Palit",
     "Patriot", "Phanteks", "Plextor", "PNY", "PowerColor", "Rosewill", "Sapphire",
     "Samsung", "SanDisk", "Seagate", "Seasonic", "SilverStone", "SK Hynix",
     "Super Flower", "Supermicro", "TeamGroup", "Thermaltake", "Toshiba", "VisionTek",
@@ -39,7 +39,7 @@ fieldMapping = {
                 "Maximum RAM": "maxMemory"
             },
 
-            "gpu": { #Finished
+            "gpu": {
                 "Chipset Manufacturer": "manufacturer",
                 "Memory Size": "memoryGb",
                 "Memory Type": "memoryType",
@@ -165,7 +165,7 @@ class componentScraper(Scraper):
                     name, partNumber, price, url = self.getNameNumberPriceUrl(componentLink, soup)
 
                     if not name or not partNumber or not price:
-                        print("  Missing info")
+                        print("There is Missing info")
                         continue
 
                     specs = self.extractFromSpecsTable(fieldMapping, soup, componentTableName)
@@ -174,8 +174,12 @@ class componentScraper(Scraper):
                         print("No specs or value missing")
                         continue
 
-                    manufacturerId = self.manufacturerMap.get(specs.get("manufacturer", "").lower()) if specs.get(
-                        "manufacturer") else None
+                    try:
+                        manufacturerId = self.manufacturerMap.get(specs.get("manufacturer", "").lower())
+                    except KeyError:
+                        print("No manufacturer available for this component")
+                        continue
+
                     score = 0
                     normalisedComponent = normalisationFunction(specs, name, manufacturerId, partNumber, price, url,
                                                                 score)
@@ -237,15 +241,25 @@ class componentScraper(Scraper):
 
     def scrapeAllComponents(self):
         for componentType, config in finalFullComponentMap.items():
+            driver = None
             try:
                 self.driver = self._initialiseDriver()
-                self.categoryUrl = config["categoryUrl"]
-                self.genericComponentScraper(config["normalizer"], config["table"])
+                if isinstance(config["categoryUrl"], list):
+                    for url in config["categoryUrl"]:
+                        self.categoryUrl = url
+                        self.genericComponentScraper(config["normaliser"], config["table"])
+                else:
+                    self.categoryUrl = config["categoryUrl"]
+                    self.genericComponentScraper(config["normaliser"], config["table"])
+
+                print(f" {componentType} completed scraping")
+
+                if driver:
+                    driver.quit() #Was having browser memory issues
+
             except Exception as e:
-                print(f"{componentType} failed: {e}")
+                print(f"{componentType} failed scraping: {e}")
 
 scraper = componentScraper("https://www.cclonline.com", computerParts)
-scraper.ramScraping() #USE SCRAPE ALL COMPONENTS
-#scraper.scrapeAllComponents()
+scraper.scrapeAllComponents()
 scraper.driver.quit()
-scraper.driver = None
