@@ -2,10 +2,14 @@ import sqlite3
 conn = sqlite3.connect("computerParts.db")
 c = conn.cursor()
 
-def droptable(names):
+def droptable():
     conn = sqlite3.connect("computerParts.db")
     c = conn.cursor()
-    for n in names:
-        c.execute(f""" DROP TABLE {n}""")
-    print("done")
-droptable(["cpu", "gpu", "ram", "motherboard", "storage", "psu", "cases"])
+    tables = ['cases']
+
+    for table in tables:
+        c.execute(f"DROP TABLE IF EXISTS {table}")
+    conn.commit()
+    print("Done")
+    conn.close()
+droptable()
