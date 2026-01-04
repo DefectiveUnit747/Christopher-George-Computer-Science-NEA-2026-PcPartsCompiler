@@ -7,64 +7,73 @@ import undetected_chromedriver as uc
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-import logging
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 baseUrl = "https://www.cclonline.com"
-componentLinksToAddOn = ["/pc-components/cpu-processors", "/pc-components/motherboards",
-                         "/pc-components/graphics-cards", "/pc-components/cases", "/pc-components/power-supplies",
-                         "/storage", "/pc-components/memory/desktop-memory"]
+componentLinksToAddOn = [
+    "/pc-components/cpu-processors", "/pc-components/motherboards",
+    "/pc-components/graphics-cards", "/pc-components/cases",
+    "/pc-components/power-supplies", "/storage",
+    "/pc-components/memory/desktop-memory"
+]
 
 class Scraper:
     def __init__(self, url, categoryUrl):
+        logger.info("Initialising scraper for category %s", categoryUrl)
+
         self.baseUrl = url
         self.categoryUrl = categoryUrl
-        self.driver = self._initialiseDriver()
-        self.projectRoot = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.requestSession = None
+        self._driver = self._initialiseDriver()
+        self._projectRoot = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._requestSession = None
 
     def _initialiseDriver(self):
+        logger.info("Launching Chrome driver")
         options = uc.ChromeOptions()
         options.add_argument("--window-size=1920,1080")
         options.add_argument("--disable-gpu")
         options.add_argument("--no-sandbox")
-
-        driver = uc.Chrome(options=options)
-        return driver
+        return uc.Chrome(options=options)
 
     def initialiseRequestSession(self):
+        logger.info("Initialising request session with browser cookies")
+
         session = requests.Session()
-        for cookie in self.driver.get_cookies():
+        for cookie in self._driver.get_cookies():
             session.cookies.set(cookie["name"], cookie["value"])
 
         session.headers.update({
-            "User-Agent": self.driver.execute_script("return navigator.userAgent;"),
+            "User-Agent": self._driver.execute_script("return navigator.userAgent;"),
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://www.cclonline.com/"
         })
 
-        self.requests_session = session
+        self._requestSession = session
+        logger.info("Request session initialised")
 
-    def acceptCookies(self):
+    def _acceptCookies(self):
         try:
-            WebDriverWait(self.driver, 5).until(
-                EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
-            ).click()
-        except:
-            pass
+            logger.info("Attempting to accept cookies")
+            WebDriverWait(self._driver, 5).until(EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))).click() #Waits for cookies thing to pop up
+            logger.info("Cookies accepted")
+        except Exception:
+            logger.warning("Cookie popup not found or could not be clicked") #Not fatal error, still can scrape if cookies didn't pop up
 
     def getProductLinks(self):
+        logger.info("Scraping product links for %s", self.categoryUrl)
         links = set()
         try:
-            self.driver.get(self.baseUrl + self.categoryUrl)
+            self._driver.get(self.baseUrl + self.categoryUrl)
             time.sleep(2)
-            self.acceptCookies()
+            self._acceptCookies()
 
             while True:
-                soup = BeautifulSoup(self.driver.page_source, "html.parser")
-
-                # Get links from current page
+                soup = BeautifulSoup(self._driver.page_source, "html.parser")
                 container = soup.find("div", class_="productListContainer")
+
                 if container:
                     for link in container.find_all("a", href=True):
                         href = link.get("href")
@@ -74,57 +83,60 @@ class Scraper:
                             continue
                         links.add(self.baseUrl + href)
 
-                # Try to find the "next" button
-                from selenium.webdriver.common.by import By
                 try:
-                    next_button = self.driver.find_element(By.LINK_TEXT, "Next")
-                    # Scroll down so the button is visible
-                    self.driver.execute_script("arguments[0].scrollIntoView();", next_button)
+                    next_button = self._driver.find_element(By.LINK_TEXT, "Next")
+                    self._driver.execute_script("arguments[0].scrollIntoView();", next_button)
                     time.sleep(0.5)
                     next_button.click()
                     time.sleep(1)
-                except:
-                    # No "Next" button → last page reached
+                except Exception:
+                    logger.info("Reached last page for %s", self.categoryUrl)
                     break
 
         except Exception as e:
-            print(f"Failed to get product links: {e}")
+            logger.error("Failed to get product links: %s", e)
 
-        print(f"Collected {len(links)} links")
+        logger.info("Collected %d product links", len(links))
         return links
 
     def extractFromSpecsTable(self, fieldMapping, soup, componentType):
+        logger.info("Extracting specs for component type %s", componentType)
+
         componentMapping = fieldMapping.get(componentType)
         if not componentMapping:
+            logger.warning("No field mapping found for %s", componentType) #If there is a missing type in the mapping from above
             return {}
+
         specs = {}
         for row in soup.find_all("tr"):
             cells = row.find_all("td")
             if len(cells) != 2:
                 continue
+
             label = cells[0].text.strip()
             value = cells[1].text.strip()
             field = componentMapping.get(label)
+
             if field:
                 if isinstance(field, list):
                     for f in field:
                         specs[f] = value
                 else:
                     specs[field] = value
+
+        logger.info("Extracted %d specs for %s", len(specs), componentType)
         return specs
 
     def getNameNumberPriceUrl(self, link, soup):
-        url = link
+        logger.info("Extracting name, part number, and price from %s", link)
 
-        # Product name: try desktop first, then mobile
+        url = link
         nameTag = soup.select_one("div#pnlTitle span.px-0") or soup.select_one("h1.product-name-mobile span.px-0")
         name = nameTag.get_text(strip=True) if nameTag else None
 
-        # Part number: try desktop first, then mobile
         partTag = soup.select_one("div#pnlPartNumber h2") or soup.select_one("div#pnlPartNumberMobile h2")
         partNumber = partTag.get_text(strip=True) if partTag else None
 
-        # Price
         priceContainer = soup.select_one("div#pnlPriceText")
         price = None
         if priceContainer:
@@ -134,13 +146,16 @@ class Scraper:
             if price_str:
                 price = float(price_str.replace(",", ""))
 
-        print(name, partNumber, price)
         return name, partNumber, price, url
 
     def downloadPartImage(self, soup, partNumber, componentSpecificDownloadPath):
+        logger.info("Downloading image for part %s", partNumber)
+
         activeCarousel = soup.find("div", class_="owl-item active")
         imageTag = activeCarousel.find("img", id="imgImage") if activeCarousel else soup.find("img", id="imgImage")
+
         if not imageTag:
+            logger.warning("No image found for part %s", partNumber)
             return None
 
         imageUrl = imageTag.get("data-src") or imageTag.get("src")
@@ -148,20 +163,24 @@ class Scraper:
             imageUrl = self.baseUrl + imageUrl
         imageUrl = imageUrl.split("?")[0]
 
-        imageContent = requests.get(imageUrl).content
+        try:
+            imageContent = requests.get(imageUrl).content
+        except Exception as e:
+            logger.error("Failed to download image for %s: %s", partNumber, e)
+            return None
+
         imageFile = io.BytesIO(imageContent)
         image = Image.open(imageFile)
         if image.mode in ("RGBA", "LA"):
             image = image.convert("RGB")
 
-        folder = os.path.join(self.projectRoot, "productImages", componentSpecificDownloadPath)
+        folder = os.path.join(self._projectRoot, "productImages", componentSpecificDownloadPath)
         os.makedirs(folder, exist_ok=True)
 
         normalisedPartNumber = partNumber.replace("/", "-").replace("\\", "-")
         filePath = os.path.join(folder, f"{normalisedPartNumber}.jpg")
         image.save(filePath, "JPEG")
-        print(f"Saved to: {filePath}")
+
+        logger.info("Saved image for %s to %s", partNumber, filePath)
 
         return os.path.join("productImages", componentSpecificDownloadPath, f"{normalisedPartNumber}.jpg")
-
-

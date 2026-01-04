@@ -1,8 +1,11 @@
-from compatibilityFunctions import *
 import sqlite3
 import math
+import logging
 
-# Constants
+from compatibilityFunctions import *
+
+logger = logging.getLogger(__name__)
+
 PART_MAPPING = {
     "cpu": {
         "table": "cpu",
@@ -73,9 +76,9 @@ PART_MAPPING = {
     }
 }
 TIER_MAPPING = {
-    "low": {"cpu": 0, "gpu": 20, "ram": 10},
+    "low":    {"cpu": 0,  "gpu": 20, "ram": 10},
     "medium": {"cpu": 30, "gpu": 50, "ram": 20},
-    "high": {"cpu": 50, "gpu": 75, "ram": 35},
+    "high":   {"cpu": 50, "gpu": 75, "ram": 35},
 }
 GPU_MAPPING = {
     "AMD": 3,
@@ -84,221 +87,294 @@ GPU_MAPPING = {
 }
 COMPONENT_ORDER = ["gpu", "cpu", "motherboard", "ram", "storage", "psu", "case"]
 
-# Global variables (set by Flask before running algorithm)
-budget = 1400
-gpuPreference = "None"
-aestheticsWeightage = 2
-futureProofingWeightage = 4
-tier = "medium"
-validPartsDict = {}
-bestBuild = None
-bestScore = 0
-bestPrice = 0
-compatibilityCache = {}
+class Component: #POLYMORPISM
+    #Base component class
+    def __init__(self, data: dict):
+        self.data = data
 
-def paretoFilter(partsList):
-    #Remove dominated parts that r definitely worse in both score AND price
-    if len(partsList) == 0:
-        return partsList
+    @property
+    def price(self):
+        return self.data.get("price", 0)
 
-    filtered = []
+    @property
+    def final_score(self):
+        return self.data.get("finalScore", 0)
 
-    for i in range(len(partsList)):
-        partNumber1, partData1 = partsList[i]
-        isDominated = False
+    def isCompatibleWith(self, build: dict) -> bool:
+        """Override in subclasses."""
+        return True
 
-        for j in range(len(partsList)):
-            if i == j:
+class CPU(Component):
+    def isCompatibleWith(self, build: dict) -> bool:
+        if "motherboard" in build:
+            if not isCpuCompatibleWithMotherboard(self.data, build["motherboard"].data):
+                return False
+        if "psu" in build:
+            if not isPsuCompatibleWithCpu(build["psu"].data, self.data):
+                return False
+        return True
+
+class GPU(Component):
+    def isCompatibleWith(self, build: dict) -> bool:
+        if "case" in build:
+            if not isGpuCompatibleWithCase(self.data, build["case"].data):
+                return False
+        if "psu" in build:
+            if not isPsuCompatibleWithGpu(build["psu"].data, self.data):
+                return False
+        return True
+
+class Motherboard(Component):
+    def isCompatibleWith(self, build: dict) -> bool:
+        if "cpu" in build:
+            if not isCpuCompatibleWithMotherboard(build["cpu"].data, self.data):
+                return False
+        if "ram" in build:
+            if not isMotherboardCompatibleWithRam(self.data, build["ram"].data):
+                return False
+            if not isRamCapacityCompatibleWithMotherboard(build["ram"].data, self.data):
+                return False
+        if "psu" in build:
+            if not isPsuCompatibleWithMotherboard(build["psu"].data, self.data):
+                return False
+        return True
+
+class RAM(Component):
+    def isCompatibleWith(self, build: dict) -> bool:
+        if "motherboard" in build:
+            if not isMotherboardCompatibleWithRam(build["motherboard"].data, self.data):
+                return False
+            if not isRamCapacityCompatibleWithMotherboard(self.data, build["motherboard"].data):
+                return False
+        return True
+
+class PSU(Component):
+    def isCompatibleWith(self, build: dict) -> bool:
+        # PSU must handle the sum of tdpWatts in the current build
+        total_tdp = sum(
+            part.data.get("tdpWatts", 0)
+            for part in build.values()
+        )
+        return self.data.get("wattage", 0) >= total_tdp
+
+class Case(Component):
+    def isCompatibleWith(self, build: dict) -> bool:
+        if "gpu" in build:
+            if not isGpuCompatibleWithCase(build["gpu"].data, self.data):
+                return False
+        if "motherboard" in build:
+            if not isMotherboardCompatibleWithCase(build["motherboard"].data, self.data):
+                return False
+        return True
+
+class Storage(Component):
+    # No special compatibility things needed
+    pass
+
+COMPONENT_CLASSES = {
+    "cpu": CPU,
+    "gpu": GPU,
+    "motherboard": Motherboard,
+    "ram": RAM,
+    "psu": PSU,
+    "case": Case,
+    "storage": Storage
+}
+
+class PcBuildCompiler:
+    def __init__(self, budget, gpuPreference, aestheticsWeight, futureWeight, tier):
+        self.budget = budget
+        self.gpuPreference = gpuPreference
+        self.aestheticsWeight = aestheticsWeight
+        self.futureWeight = futureWeight
+        self.tier = tier
+
+        self.validParts = {}
+        self.bestBuild = None
+        self.bestScore = 0.0
+        self.bestPrice = 0.0
+
+    def _paretoFilter(self, partsList):
+        if not partsList:
+            return partsList
+
+        filtered = []
+        for i in range(len(partsList)):
+            partNumber1, partData1 = partsList[i]
+            isDominated = False
+
+            for j in range(len(partsList)):
+                if i == j:
+                    continue
+
+                partNumber2, partData2 = partsList[j]
+
+                if (partData2["finalScore"] > partData1["finalScore"] and
+                        partData2["price"] < partData1["price"]):
+                    isDominated = True
+                    break
+
+            if not isDominated:
+                filtered.append((partNumber1, partData1))
+
+        return filtered
+
+    def _reformatScores(self, validDict):
+        for key, value in validDict.items():
+            score = float(value.get("score", 0))
+            efficiencyScore = float(value.get("scoreEfficiency", 0))
+            futureScore = float(value.get("scoreUpgradeability", 0))
+            performanceWeight = 5
+
+            weightedScore = (
+                performanceWeight * score +
+                self.aestheticsWeight * efficiencyScore +
+                self.futureWeight * futureScore
+            )
+
+            value.pop("score", None)
+            value.pop("scoreEfficiency", None)
+            value.pop("scoreUpgradeability", None)
+            value["finalScore"] = weightedScore
+
+        return validDict
+
+    def _mergeSortParts(self, parts):
+        if len(parts) <= 1:
+            return parts
+
+        mid = len(parts) // 2
+        left = self._mergeSortParts(parts[:mid])
+        right = self._mergeSortParts(parts[mid:])
+        return self._mergeParts(left, right)
+
+    def _mergeParts(self, left, right):
+        merged = []
+        i = j = 0
+
+        while i < len(left) and j < len(right):
+            leftScore = left[i][1]["finalScore"]
+            rightScore = right[j][1]["finalScore"]
+
+            if leftScore >= rightScore:
+                merged.append(left[i])
+                i += 1
+            else:
+                merged.append(right[j])
+                j += 1
+
+        merged.extend(left[i:])
+        merged.extend(right[j:])
+        return merged
+
+    def loadValidParts(self, dbPath="computerParts.db"):
+        logger.info("Loading valid parts from DB")
+
+        conn = sqlite3.connect(dbPath)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+
+        validPartsDicts = {}
+
+        for key, value in PART_MAPPING.items():
+            minScore = TIER_MAPPING[self.tier][key] if value["tierName"] else 0
+            columns = ", ".join(value["columns"])
+            table = value["table"]
+
+            if key == "gpu" and self.gpuPreference != "None":
+                manufacturerId = GPU_MAPPING[self.gpuPreference]
+                query = f"SELECT {columns} FROM {table} WHERE score >= ? AND manufacturerId = ?"
+                values = c.execute(query, (minScore, manufacturerId)).fetchall()
+            else:
+                query = f"SELECT {columns} FROM {table} WHERE score >= ?"
+                values = c.execute(query, (minScore,)).fetchall()
+
+            validDict = {part["partNumber"]: dict(part) for part in values}
+            formattedDict = self._reformatScores(validDict)
+
+            sortedParts = self._mergeSortParts(list(formattedDict.items()))
+            filteredParts = self._paretoFilter(sortedParts)
+
+            validPartsDicts[key] = filteredParts
+            logger.info("Loaded %d parts for %s (after Pareto)", len(filteredParts), key)
+
+        conn.close()
+
+        wrapped = {}
+        for compType, partsList in validPartsDicts.items():
+            cls = COMPONENT_CLASSES[compType]
+            wrapped[compType] = [(pn, cls(data)) for pn, data in partsList]
+
+        self.validParts = wrapped
+
+    @staticmethod
+    def _getMaxScorePerComponent(partsList):
+        return partsList[0][1].finalScore if partsList else 0
+
+    @staticmethod
+    def _getMinPricePerComponent(partsList):
+        return min(part.price for _, part in partsList) if partsList else math.inf
+
+    def _lowerBoundPruning(self, remaining):
+        return sum(
+            self._getMinPricePerComponent(self.validParts[comp])
+            for comp in remaining
+        )
+
+    def _branchAndBoundUpper(self, remaining):
+        return sum(
+            self._getMaxScorePerComponent(self.validParts[comp])
+            for comp in remaining
+        )
+
+    def _dfs(self, level, currentBuild, currentPrice, currentScore):
+        if level == len(COMPONENT_ORDER):
+            if currentScore > self.bestScore:
+                self.bestScore = currentScore
+                self.bestBuild = currentBuild.copy()
+                self.bestPrice = currentPrice
+                logger.info("New best build: score=%.2f price=%.2f", currentScore, currentPrice)
+            return
+
+        currentType = COMPONENT_ORDER[level]
+        remaining = COMPONENT_ORDER[level + 1:]
+
+        maxScoreFuture = 0.95 * self._branchAndBoundUpper(remaining)
+        minBudgetFuture = self._lowerBoundPruning(remaining)
+
+        for partNumber, part in self.validParts.get(currentType, []):
+            if currentType == "gpu":
+                newPrice = currentPrice + (1.2 * part.price)
+            else:
+                newPrice = currentPrice + part.price
+
+            if newPrice > self.budget:
+                continue
+            if (self.budget - newPrice) < minBudgetFuture:
+                continue
+            if not part.isCompatibleWith(currentBuild):
+                continue
+            if self.bestBuild and (currentScore + maxScoreFuture) <= self.bestScore:
                 continue
 
-            partNumber2, partData2 = partsList[j]
+            newBuild = currentBuild.copy()
+            newBuild[currentType] = part
+            newScore = currentScore + part.finalScore
 
-            # Part 1 is dominated ONLY if Part 2 is STRICTLY better in BOTH dimensions
-            if (partData2["finalScore"] > partData1["finalScore"] and
-                    partData2["price"] < partData1["price"]):
-                isDominated = True
-                break
+            self._dfs(level + 1, newBuild, newPrice, newScore)
 
-        if not isDominated:
-            filtered.append((partNumber1, partData1))
+    def findBestBuild(self, dbPath="computerParts.db"):
+        self.loadValidParts(dbPath)
+        self.bestBuild = None
+        self.bestScore = 0
+        self.bestPrice = 0
 
-    return filtered
+        self._dfs(
+            level=0,
+            currentBuild={},
+            currentPrice=0.0,
+            currentScore=0.0
+        )
 
-def getValidPartsFromDb(gpuPreference, tier, aestheticsWeightage, futureProofingWeightage):
-    validPartsDicts = {}
-    conn = sqlite3.connect("computerParts.db")
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
+        return self.bestBuild, self.bestScore, self.bestPrice
 
-    for key, value in PART_MAPPING.items():
-        minScore = TIER_MAPPING[tier][key] if value["tierName"] else 0
-        columns = ", ".join(value["columns"])
-        table = value["table"]
-
-        if key == "gpu" and gpuPreference != "None":
-            manufacturerId = GPU_MAPPING[gpuPreference]
-            query = f"SELECT {columns} FROM {table} WHERE score >= ? AND manufacturerId = ?"
-            values = c.execute(query, (minScore, manufacturerId)).fetchall()
-        else:
-            query = f"SELECT {columns} FROM {table} WHERE score >= ?"
-            values = c.execute(query, (minScore,)).fetchall()
-
-        validDict = {part["partNumber"]: dict(part) for part in values}
-        formattedDict = reformatDictionariesWithNewScores(validDict, aestheticsWeightage, futureProofingWeightage)
-
-        # Sort parts by finalScore (highest first) using merge sort
-        sortedParts = mergeSortParts(list(formattedDict.items()))
-
-        # Apply Pareto filtering
-        filteredParts = paretoFilter(sortedParts)
-
-        validPartsDicts[key] = filteredParts
-
-    conn.close()
-    return validPartsDicts
-
-def reformatDictionariesWithNewScores(validDict, aestheticsWeightage, futureProofingWeightage):
-    for key, value in validDict.items():
-        score = float(value.get("score", 0))
-        efficiencyScore = float(value.get("scoreEfficiency", 0))
-        futureScore = float(value.get("scoreUpgradeability", 0))
-        performanceWeight = 5
-
-        weightedScore = (performanceWeight * score) + (aestheticsWeightage * efficiencyScore) + (
-                futureProofingWeightage * futureScore)
-        value.pop("score")
-        value.pop("scoreEfficiency")
-        value.pop("scoreUpgradeability")
-        value["finalScore"] = weightedScore
-    return validDict
-
-def mergeSortParts(parts):
-    if len(parts) <= 1:
-        return parts
-
-    mid = len(parts) // 2
-    left = mergeSortParts(parts[:mid])
-    right = mergeSortParts(parts[mid:])
-
-    return mergeParts(left, right)
-
-def mergeParts(left, right):
-    merged = []
-    i = j = 0
-
-    while i < len(left) and j < len(right):
-        left_score = left[i][1]["finalScore"]
-        right_score = right[j][1]["finalScore"]
-
-        if left_score >= right_score:
-            merged.append(left[i])
-            i += 1
-        else:
-            merged.append(right[j])
-            j += 1
-
-    merged.extend(left[i:])
-    merged.extend(right[j:])
-    return merged
-
-def getMaxScorePerComponent(componentType, partsList):
-    # Return highest score (first in pre-sorted list)
-    return partsList[0][1]['finalScore'] if partsList else 0
-
-def getMinPricePerComponent(partsList):
-    # Now partsList is a list of tuples, not a dict
-    return min(partData["price"] for _, partData in partsList) if partsList else math.inf
-
-def lowerBoundPruning(remaining, validPartsDict):
-    return sum(getMinPricePerComponent(validPartsDict[i]) for i in remaining)
-
-def branchAndBound(build, remaining, validPartsDict):
-    return sum(getMaxScorePerComponent(i, validPartsDict[i]) for i in remaining)
-
-def isCompatibleWithCurrentBuild(componentType, newPart, currentBuild):
-    if componentType == "cpu":
-        if "motherboard" in currentBuild and not isCpuCompatibleWithMotherboard(newPart, currentBuild["motherboard"]):
-            return False
-        if "psu" in currentBuild and not isPsuCompatibleWithCpu(currentBuild["psu"], newPart):
-            return False
-        return True
-
-    elif componentType == "motherboard":
-        if "cpu" in currentBuild and not isCpuCompatibleWithMotherboard(currentBuild["cpu"], newPart):
-            return False
-        if "ram" in currentBuild:
-            if not isMotherboardCompatibleWithRam(newPart, currentBuild["ram"]):
-                return False
-            if not isRamCapacityCompatibleWithMotherboard(currentBuild["ram"], newPart):
-                return False
-        if "psu" in currentBuild and not isPsuCompatibleWithMotherboard(currentBuild["psu"], newPart):
-            return False
-        return True
-
-    elif componentType == "ram":
-        if "motherboard" in currentBuild:
-            if not isMotherboardCompatibleWithRam(currentBuild["motherboard"], newPart):
-                return False
-            if not isRamCapacityCompatibleWithMotherboard(newPart, currentBuild["motherboard"]):
-                return False
-        return True
-
-    elif componentType == "gpu":
-        if "case" in currentBuild and not isGpuCompatibleWithCase(newPart, currentBuild["case"]):
-            return False
-        if "psu" in currentBuild and not isPsuCompatibleWithGpu(currentBuild["psu"], newPart):
-            return False
-        return True
-
-    elif componentType == "psu":
-        return newPart["wattage"] >= calculateTotalWattage(currentBuild)
-
-    elif componentType == "case":
-        if "gpu" in currentBuild and not isGpuCompatibleWithCase(currentBuild["gpu"], newPart):
-            return False
-        if "motherboard" in currentBuild and not isMotherboardCompatibleWithCase(currentBuild["motherboard"], newPart):
-            return False
-        return True
-
-    return True
-
-def calculateTotalWattage(build):
-    return sum(partData.get("tdpWatts", 0) for partData in build.values())
-
-def depthFirstSearch(level, currentBuild, currentPrice, currentScore, budget, validPartsDict):
-    global bestBuild, bestScore, bestPrice
-
-    if level == 7:
-        if currentScore > bestScore:
-            bestScore = currentScore
-            bestBuild = currentBuild.copy()
-            bestPrice = currentPrice
-            print(f"New Best Score: {currentScore}, Price: £{currentPrice:.2f}")
-        return
-
-    currentComponentType = COMPONENT_ORDER[level]
-    remaining = COMPONENT_ORDER[level + 1:]
-    maxScore = 0.95 * branchAndBound(currentBuild, remaining, validPartsDict)
-    minBudgetOnBranch = lowerBoundPruning(remaining, validPartsDict)
-
-
-    for partNumber, partData in validPartsDict[currentComponentType]:
-        if currentComponentType == "gpu":
-            newPrice = currentPrice + (1.2 * partData["price"])
-        else:
-            newPrice = currentPrice + partData["price"]
-
-        # Pruning checks
-        if newPrice > budget:
-            continue
-        if (budget - newPrice) < minBudgetOnBranch:
-            continue
-        if not isCompatibleWithCurrentBuild(currentComponentType, partData, currentBuild):
-            continue
-        if bestBuild and (currentScore + maxScore) <= bestScore:
-            continue
-
-        newBuild = currentBuild.copy()
-        newBuild[currentComponentType] = partData
-        newScore = currentScore + partData["finalScore"]
-        depthFirstSearch(level + 1, newBuild, newPrice, newScore, budget, validPartsDict)

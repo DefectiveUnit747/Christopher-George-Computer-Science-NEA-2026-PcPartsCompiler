@@ -1,10 +1,9 @@
 from flask import Flask, render_template, redirect, jsonify, request
-
-
 from savedPreferences import *
 from savedPreferences import extractPreferences, saveGamePreference
 from storage import Storage
 import requests
+from createBuildList import PcBuildCompiler
 import time
 
 app = Flask(__name__)
@@ -85,18 +84,14 @@ def resultsPage():
 def generateBuild():
     try:
         print("=== STARTING BUILD GENERATION ===")
-        import createBuildList
-        print("✓ Module imported")
 
-        # Get preferences from Storage
+        # Load preferences
         budget = int(Storage.buildPreferences.get("budget", 1400))
         gpuPreference = Storage.buildPreferences.get("gpuPreference", "any")
         aestheticsWeightage = int(Storage.buildPreferences.get("aesthetics", 2))
-        futureProofingWeightage = int(Storage.buildPreferences.get("futurePref", 4))
+        futureWeight = int(Storage.buildPreferences.get("futurePref", 4))
         tier = Storage.gameData.get("tier", "medium")
-        print("✓ Preferences loaded")
 
-        # Map GPU preference
         gpuMapping = {
             "any": "None",
             "nvidia": "Nvidia",
@@ -106,64 +101,38 @@ def generateBuild():
         gpuPreference = gpuMapping.get(gpuPreference.lower(), "None")
 
         print(f"Budget: £{budget}, GPU: {gpuPreference}, Tier: {tier}")
-        print("Calling getValidPartsFromDb...")
 
-        # Load parts
-        validPartsDict = createBuildList.getValidPartsFromDb(gpuPreference, tier, aestheticsWeightage, futureProofingWeightage)
-
-        print("✓ getValidPartsFromDb returned")
-
-        # Debug output
-        print("\n=== PARTS AVAILABLE ===")
-        total_parts = 0
-        for component, parts in validPartsDict.items():
-            part_count = len(parts)
-            print(f"{component}: {part_count} parts")
-            total_parts += part_count
-            if part_count == 0:
-                print(f"  ⚠️ WARNING: No {component} parts found!")
-
-        print(f"TOTAL: {total_parts} parts across all components")
-        print("=======================\n")
-
-        if total_parts == 0:
-            return jsonify({"error": "No parts available for this configuration"}), 404
-
-        # Check missing components
-        for component, parts in validPartsDict.items():
-            if len(parts) == 0:
-                return jsonify({
-                    "error": f"No compatible {component} parts available for tier '{tier}' with GPU preference '{gpuPreference}'"
-                }), 404
-
-        print("Starting depth-first search...")
-
-        # Reset globals
-        createBuildList.bestBuild = None
-        createBuildList.bestScore = 0
-        createBuildList.bestPrice = 0
-        startTime = time.time()
-        createBuildList.depthFirstSearch(
-            0, {}, 0, 0, budget, validPartsDict
+        builder = PcBuildCompiler(
+            budget=budget,
+            gpu_preference=gpuPreference,
+            aesthetics_weight=aestheticsWeightage,
+            future_weight=futureWeight,
+            tier=tier
         )
 
-        print("Search complete!")
-        print("--- %s seconds ---" % (time.time() - startTime))
-        if createBuildList.bestBuild:
-            print(f"✓ Build found! Score: {createBuildList.bestScore}, Price: £{createBuildList.bestPrice:.2f}")
-            return jsonify(createBuildList.bestBuild), 200
-        else:
-            print("✗ No valid build found")
-            return jsonify({
-                "error": "No valid build found within your budget and preferences. Try increasing budget or lowering tier."
-            }), 404
+        print("✓ builder created")
+        print("Loading parts...")
+
+        bestBuild, bestScore, bestPrice = builder.find_best_build()
+
+        if bestBuild:
+            print(f" Build found. Score: {bestScore}, Price: £{bestPrice:.2f}")
+
+            # Convert dict of objects into dict of dicts
+            jsonBuild = {
+                comp: part.data
+                for comp, part in bestBuild.items()
+            }
+
+            return jsonify(jsonBuild), 200
+
+        print("No valid build found")
+        return jsonify({
+            "error": "No valid build found within your budget and preferences."}), 404
 
     except Exception as e:
         print(f"EXCEPTION in generateBuild: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True)

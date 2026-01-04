@@ -20,7 +20,6 @@ efficiencyMap = {
     "platinum": {"performance": 35, "efficiency": 85},
     "titanium": {"performance": 40, "efficiency": 100}
 } #The 80+ efficiency will have different weights when I calculate the score vs the efficiency score, so there is a dictionary for each efficiency tier
-
 formFactorWeights = {
     "EATX": 4,
     "E-ATX": 4,

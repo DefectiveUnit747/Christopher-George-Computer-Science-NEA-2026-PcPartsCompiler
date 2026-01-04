@@ -7,7 +7,10 @@ from pcBuildListCompiler.databasing.createDatabase import *
 from pcBuildListCompiler.scrapingTools.dataNormalisationFunctions import *
 from scraper import Scraper
 from pcBuildListCompiler.databasing.createDatabase import Database
-#ADD IN LOGGING
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 manufacturers = [
     "ADATA", "Aerocool", "AMD", "Antec", "ASRock", "ASUS", "be quiet!", "Biostar",
@@ -145,22 +148,26 @@ DATABASE_PATH = os.path.join(ROOT_DIRECTORY, "computerParts.db")
 
 class componentScraper(Scraper):
     def __init__(self, baseUrl, database):
+        logger.info("Initialising component scraper")
         super().__init__(baseUrl, "")
         self.database = database
         self.manufacturerMap = self.database.getManufacturerMap()
+        logger.info("Loaded %d manufacturers into map", len(self.manufacturerMap))
 
     def genericComponentScraper(self, normalisationFunction, componentTableName):
+        logger.info("Starting scrape for component type '%s'", componentTableName)
+
         try:
             links = self.getProductLinks()
-            print(f"Found {len(links)} links")
+            logger.info("Found %d product links for %s", len(links), componentTableName)
 
             counter = 0
             for componentLink in links:
                 try:
                     counter += 1
-                    print(f"\n[{counter}/{len(links)}] -> {componentLink}")
-                    self.driver.get(componentLink)
+                    logger.info("[%d/%d] Scraping %s", counter, len(links), componentLink)
 
+                    self.driver.get(componentLink)
                     time.sleep(random.uniform(10, 20))
                     time.sleep(5)
 
@@ -169,83 +176,103 @@ class componentScraper(Scraper):
                     name, partNumber, price, url = self.getNameNumberPriceUrl(componentLink, soup)
 
                     if not name or not partNumber or not price:
-                        print("There is Missing info")
+                        logger.warning("Missing info for %s — skipping", componentLink)
                         continue
 
                     specs = self.extractFromSpecsTable(fieldMapping, soup, componentTableName)
 
                     if not specs or None in specs.values():
-                        print("No specs or value missing")
+                        logger.warning("Specs missing or incomplete for %s — skipping", partNumber)
                         continue
-
 
                     manufacturerId = self.manufacturerMap.get(specs.get("manufacturer", "").lower())
-                    if manufacturerId:
-                        score = 0
-                        normalisedComponent = normalisationFunction(specs, name, manufacturerId, partNumber, price, url, score)
-                        imageFolder = componentImageFolders.get(componentTableName)
-                        imagePath = self.downloadPartImage(soup, partNumber, imageFolder)
-                        if imagePath:
-                            normalisedComponent["imagePath"] = imagePath
-                        self.database.insertComponent(componentTableName, normalisedComponent)
-                        print(f"  {name}")
-
-                        if counter % 5 == 0:
-                            extraDelay = random.uniform(3, 15)
-                            print(f"  Cooling down {extraDelay:.0f}s...")
-                            time.sleep(extraDelay)
-                    else:
+                    if not manufacturerId:
+                        logger.warning("Unknown manufacturer '%s' for part %s — skipping",
+                                       specs.get("manufacturer"), partNumber)
                         continue
 
+                    score = 0
+                    normalisedComponent = normalisationFunction(
+                        specs, name, manufacturerId, partNumber, price, url, score
+                    )
+
+                    imageFolder = componentImageFolders.get(componentTableName)
+                    imagePath = self.downloadPartImage(soup, partNumber, imageFolder)
+
+                    if imagePath:
+                        normalisedComponent["imagePath"] = imagePath
+                        logger.info("Image saved for %s", partNumber)
+                    else:
+                        logger.warning("No image saved for %s", partNumber)
+
+                    self.database.insertComponent(componentTableName, normalisedComponent)
+                    logger.info("Inserted %s into table '%s'", partNumber, componentTableName)
+
+                    if counter % 5 == 0:
+                        extraDelay = random.uniform(3, 15)
+                        logger.info("Cooling down for %.0f seconds", extraDelay)
+                        time.sleep(extraDelay)
+
                 except Exception as e:
-                    print(f"  Error: {e}")
+                    logger.error("Error scraping %s: %s", componentLink, e)
                     continue
 
         except Exception as e:
-            print(f"BAD: {e}")
+            logger.critical("Fatal error in genericComponentScraper for %s: %s",
+                            componentTableName, e)
             raise e
 
     def cpuScraping(self):
-        self.driver = self._initialiseDriver()#
+        logger.info("Starting CPU scraping")
+        self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["cpu"]["categoryUrl"]
         self.genericComponentScraper(normaliseCpuScrapedValues, "cpu")
 
     def gpuScraping(self):
+        logger.info("Starting GPU scraping")
         self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["gpu"]["categoryUrl"]
         self.genericComponentScraper(normaliseGpuScrapedValues, "gpu")
 
     def ramScraping(self):
+        logger.info("Starting RAM scraping")
         self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["ram"]["categoryUrl"]
         self.genericComponentScraper(normaliseRamScrapedValues, "ram")
 
     def psuScraping(self):
+        logger.info("Starting PSU scraping")
         self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["psu"]["categoryUrl"]
         self.genericComponentScraper(normalisePsuScrapedValues, "psu")
 
     def storageScraping(self):
-        for i in finalFullComponentMap["storage"]["categoryUrl"]:
+        logger.info("Starting storage scraping")
+        for url in finalFullComponentMap["storage"]["categoryUrl"]:
             self.driver = self._initialiseDriver()
-            self.categoryUrl = i
+            self.categoryUrl = url
             self.genericComponentScraper(normaliseStorageScrapedValues, "storage")
 
     def caseScraping(self):
+        logger.info("Starting case scraping")
         self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["cases"]["categoryUrl"]
         self.genericComponentScraper(normaliseCaseScrapedValues, "cases")
 
     def motherboardScraping(self):
+        logger.info("Starting motherboard scraping")
         self.driver = self._initialiseDriver()
         self.categoryUrl = finalFullComponentMap["motherboard"]["categoryUrl"]
         self.genericComponentScraper(normaliseMotherboardScrapedValues, "motherboard")
 
     def scrapeAllComponents(self):
+        logger.info("Starting full scrape of all component types")
+
         for componentType, config in finalFullComponentMap.items():
-            driver = None
             try:
+                logger.info("Scraping %s", componentType)
                 self.driver = self._initialiseDriver()
+
                 if isinstance(config["categoryUrl"], list):
                     for url in config["categoryUrl"]:
                         self.categoryUrl = url
@@ -254,17 +281,18 @@ class componentScraper(Scraper):
                     self.categoryUrl = config["categoryUrl"]
                     self.genericComponentScraper(config["normaliser"], config["table"])
 
-                print(f" {componentType} completed scraping")
+                logger.info("%s scraping completed", componentType)
 
             except Exception as e:
-                print(f"{componentType} failed scraping: {e}")
+                logger.error("%s scraping failed: %s", componentType, e)
+
             finally:
                 if self.driver:
                     try:
                         self.driver.quit()
                     except Exception:
-                        pass
-                        self.driver = None #Was having browser memory issues
+                        logger.warning("Driver quit failed — ignoring")
+                    self.driver = None
 
 scraper = componentScraper("https://www.cclonline.com", computerParts)
 scraper.caseScraping()
