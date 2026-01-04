@@ -1,69 +1,81 @@
-import urllib
 import requests
 
 RAWG_API_KEY = "a8008f8d0c084fe6a24273dc4fe4ba3e"
-url = "https://api.rawg.io/api/games"
+RAWG_SEARCH_URL = "https://api.rawg.io/api/games"
 
 def extractPreferences(data):
     preferences = {
-        "budget": data["budget"],
-        "aesthetics": data["aesthetics"],
-        "futurePref": data["futurePref"],
-        "gpuPreference": data["gpuPreference"]
+        "budget": int(data.get("budget", 1400)),
+        "aesthetics": int(data.get("aesthetics", 2)),
+        "futurePref": int(data.get("futurePref", 4)),
+        "gpuPreference": data.get("gpuPreference", "any")
     }
     return preferences
 
-def saveGamePreference(gameName, RAWG_API_KEY, url):
-    params = {
-        "key": RAWG_API_KEY, #Parameters for the key, and what to search for (the name)
-        "search": gameName}
-
-    response = requests.get(url, params=params)
+def saveGamePreference(gameName):
+    params = {"key": RAWG_API_KEY, "search": gameName, "page_size": 1}
+    response = requests.get(RAWG_SEARCH_URL, params=params)
     data = response.json()
 
-    # Step 2: Get the slug of the first matching game
-    if data['results']:
-        game_slug = data['results'][0]['slug']
-        print(f"Found game slug: {game_slug}")
-    else:
+    if not data.get("results"):
         return None
 
-    # Step 3: Get detailed info including requirements
-    details_url = f'https://api.rawg.io/api/games/{game_slug}'
-    details_params = {'key': RAWG_API_KEY}
-    details_response = requests.get(details_url, params=details_params)
-    details_data = details_response.json()
+    gameSlug = data["results"][0]["slug"]
+    print(f"Found game slug: {gameSlug}")
 
-    # Step 4: Extract system requirements
-    platforms = details_data.get('platforms', [])
-    for platform in platforms:
-        name = platform["platform"]["name"].lower()
-        if name == "pc":
-            requirements = platform.get('requirements', {})
-            if requirements:
-                recommendedRequirements = requirements.get('recommended', "N/A")
-                return normaliseRequirements(recommendedRequirements)
-    else:
+    detailsUrl = f"https://api.rawg.io/api/games/{gameSlug}"
+    detailsParams = {"key": RAWG_API_KEY}
+    detailsResponse = requests.get(detailsUrl, params=detailsParams)
+
+    if detailsResponse.status_code != 200:
         return None
 
-def normaliseRequirements(requirements):
-    normalisedRequirements = {}
+    detailsData = detailsResponse.json()
 
-    lineByLine = requirements.split("\n")
-    for line in lineByLine:
-        line = line.strip()
-        if ":" not in line:
-            continue
+    platforms = [p["platform"]["name"].lower() for p in detailsData.get("platforms", [])]
+    genres = [g["name"].lower() for g in detailsData.get("genres", [])]
+    tags = [t["name"].lower() for t in detailsData.get("tags", [])]
 
-        if line.lower().startswith("processor"):
-            normalisedRequirements["cpu"] = line.split(":", 1)[1].split(" or ")[0].strip()
-        elif line.lower().startswith("memory") or line.lower().startswith("ram"):
-            normalisedRequirements["memory"] = line.split(":", 1)[1].split(" or ")[0].strip()
-        elif line.lower().startswith("graphics"):
-            normalisedRequirements["graphics"] = line.split(":", 1)[1].split(" or ")[0].strip()
-        elif line.lower().startswith("video"):
-            normalisedRequirements["video"] = line.split(":", 1)[1].split(" or ")[0].strip()
-        elif line.lower().startswith("storage") or line.lower().startswith("hard drive"):
-            normalisedRequirements["storage"] = line.split(":", 1)[1].strip()
+    released = detailsData.get("released", "2000")
+    release_year = int(released[:4]) if released else 2000
 
-    return normalisedRequirements
+    if not any("pc" in p for p in platforms):
+        tier = "low"
+    elif any("playstation 2" in p or "playstation 3" in p or "xbox 360" in p for p in platforms):
+        tier = "low"
+    elif release_year < 2014:
+        tier = "low"
+    elif "open world" in genres or "open world" in tags:
+        tier = "high"
+    elif 2014 <= release_year < 2020:
+        tier = "medium"
+    else:
+        high_genres = {"shooter", "rpg", "open world", "action-adventure"}
+        tier = "high" if set(genres) & high_genres else "medium"
+
+    print("Tier:", tier)
+
+    return {
+        "game": gameName,
+        "slug": gameSlug,
+        "genres": genres,
+        "tags": tags,
+        "platforms": platforms,
+        "release_year": release_year,
+        "tier": tier
+    }
+
+def determinePerformanceTier(genres):
+
+    high = {"action", "shooter", "rpg", "adventure", "open world", "racing"}
+    mid = {"strategy", "sports", "survival", "platformer", "simulation"}
+    low = {"puzzle", "casual", "indie", "2d", "arcade"}
+
+    genreSet = set(genres)
+
+    if genreSet & high:
+        return "high"
+    elif genreSet & mid:
+        return "medium"
+    else:
+        return "low"

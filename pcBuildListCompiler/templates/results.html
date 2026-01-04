@@ -2,27 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PcPartsCompiler</title>
+    <title>Build Results</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='particles/particles.min.js') }}"></script>
 </head>
 <body>
     <div id="particles-js"></div>
 
-    <!-- Empty content container -->
-    <div class="emptyContentContainer">
-        <!-- Add your content here -->
+    <div class="resultsContainer">
+        <div class="resultsBox">
+            <h1>Your Custom PC Build</h1>
+            <div id="totalPrice" class="totalPrice">Total: £<span id="priceValue">0.00</span></div>
+
+            <div id="buildResults" class="buildResultsGrid">
+                <div class="loading">Generating your perfect build...</div>
+            </div>
+
+            <div class="actionButtons">
+                <button id="backButton" class="actionButton">Start Over</button>
+                <button id="exportButton" class="actionButton">Export Build</button>
+            </div>
+        </div>
     </div>
 
+    <!-- THIS IS THE IMPORTANT LINE THAT WAS MISSING -->
     <script src="{{ url_for('static', filename='app.js') }}"></script>
+
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             particlesJS.load(
                 'particles-js',
-                '{{ url_for("static", filename="particles/particles-config.json") }}',
-                () => {
-                    console.log('particles.js background loaded');
-                }
+                '{{ url_for("static", filename="particles/particles-config.json") }}'
             );
         });
     </script>

@@ -12,11 +12,9 @@ manufacturers = [
 
 class Database:
     def __init__(self):
-        # Go up one directory from databasing/ to pcBuildListCompiler/
         ROOT_DIRECTORY = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.conn = sqlite3.connect(os.path.join(ROOT_DIRECTORY, "computerParts.db"))
         self.cursor = self.conn.cursor()
-
 
     def createDatabaseTables(self):
         try:

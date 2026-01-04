@@ -41,26 +41,22 @@
                 <br><br>
                 <div id="gamePreview"></div>
                 <div id="searchSuggestion"></div>
+
                 <br><br><br><br><br><br><br><br><br><br><br><br>
-                <button id="maincontentPageButton">Click to Continue</button>
+                <button id="mainContentPageButton" class="continueButton">Click to Continue</button>
             </div>
         </div>
 
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
+
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            particlesJS.load('particles-js', '{{ url_for("static", filename="particles/particles-config.json") }}', () => {
-                console.log('particles.js config loaded');
-            });
-
-            const startButton = document.getElementById("maincontentPageButton");
-            if (startButton) {
-                startButton.addEventListener("click", () => {
-                    window.location.href = "/homePage/mainContent/results";
-                });
-            }
+            particlesJS.load(
+                'particles-js',
+                '{{ url_for("static", filename="particles/particles-config.json") }}'
+            );
         });
     </script>
 </body>
