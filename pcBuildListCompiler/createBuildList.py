@@ -97,7 +97,7 @@ class Component: #POLYMORPISM
         return self.data.get("price", 0)
 
     @property
-    def final_score(self):
+    def finalScore(self):
         return self.data.get("finalScore", 0)
 
     def isCompatibleWith(self, build: dict) -> bool:
@@ -377,4 +377,3 @@ class PcBuildCompiler:
         )
 
         return self.bestBuild, self.bestScore, self.bestPrice
-

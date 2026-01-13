@@ -83,7 +83,6 @@ def resultsPage():
 @app.route("/generateBuild", methods=["POST"])
 def generateBuild():
     try:
-        print("=== STARTING BUILD GENERATION ===")
 
         # Load preferences
         budget = int(Storage.buildPreferences.get("budget", 1400))
@@ -104,19 +103,16 @@ def generateBuild():
 
         builder = PcBuildCompiler(
             budget=budget,
-            gpu_preference=gpuPreference,
-            aesthetics_weight=aestheticsWeightage,
-            future_weight=futureWeight,
+            gpuPreference=gpuPreference,
+            aestheticsWeight=aestheticsWeightage,
+            futureWeight=futureWeight,
             tier=tier
         )
 
-        print("✓ builder created")
-        print("Loading parts...")
-
-        bestBuild, bestScore, bestPrice = builder.find_best_build()
+        bestBuild, bestScore, bestPrice = builder.findBestBuild()
 
         if bestBuild:
-            print(f" Build found. Score: {bestScore}, Price: £{bestPrice:.2f}")
+            print(f"Build found. Score: {bestScore}, Price: £{bestPrice:.2f}")
 
             # Convert dict of objects into dict of dicts
             jsonBuild = {
@@ -126,12 +122,15 @@ def generateBuild():
 
             return jsonify(jsonBuild), 200
 
-        print("No valid build found")
+        print("✗ No valid build found")
         return jsonify({
-            "error": "No valid build found within your budget and preferences."}), 404
+            "error": "No valid build found within your budget and preferences."
+        }), 404
 
     except Exception as e:
         print(f"EXCEPTION in generateBuild: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
