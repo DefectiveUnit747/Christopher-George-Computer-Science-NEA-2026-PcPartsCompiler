@@ -295,8 +295,3 @@ class componentScraper(Scraper):
                     self.driver = None
 
 scraper = componentScraper("https://www.cclonline.com", computerParts)
-scraper.caseScraping()
-if scraper.driver:
-    scraper.driver.quit()
-    scraper.driver = None
-

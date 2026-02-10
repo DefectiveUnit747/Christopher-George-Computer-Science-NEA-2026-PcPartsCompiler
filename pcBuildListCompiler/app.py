@@ -4,6 +4,7 @@ from savedPreferences import extractPreferences, saveGamePreference
 from storage import Storage
 import requests
 from createBuildList import PcBuildCompiler
+from flask_apscheduler import APScheduler
 import time
 
 app = Flask(__name__)
@@ -11,6 +12,20 @@ app.secret_key = "SuperSecretKeyTEMPORARY"
 RAWG_API_KEY = "a8008f8d0c084fe6a24273dc4fe4ba3e"
 url = "https://api.rawg.io/api"
 getRequirementsUrl = "https://api.rawg.io/api/games"
+maintenanceMode = False
+
+class Config:
+    SCHEDULER_API_ENABLED = True
+    SCHEDULER_TIMEZONE = "Europe/London"
+
+@app.before_request
+def check_maintenance():
+    if maintenanceMode and request.endpoint not in ["maintenance_page", "static"]:
+        return render_template("maintenance.html"), 503
+
+@app.route("/maintenance")
+def maintenance_page():
+    return render_template("maintenance.html"), 503
 
 @app.route('/')
 def index():
@@ -132,6 +147,37 @@ def generateBuild():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+# @scheduler.task("cron", id="weekly_scrape", week="*", day_of_week="sun", hour=2, minute=0)
+def scheduled_scrape():
+    """Run scraper every Sunday at 2 AM - CURRENTLY DISABLED"""
+    try:
+        maintenanceMode = True
+        print("Maintenance mode ENABLED - Site is down")
+
+        from scrapingTools.scrapeComponents import scraper, computerParts
+
+        # Drop and recreate tables
+        computerParts.createDatabaseTables()
+
+        # Run the scraper
+        scraper.scrapeAllComponents()
+
+        print("Scheduled scrape completed successfully")
+
+    except Exception as e:
+        print(f"Scheduled scrape failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+    finally:
+        maintenanceMode = False
+        print("Maintenance mode DISABLED - Site is back up")
+
+app.config.from_object(Config())
+scheduler = APScheduler()
+scheduler.init_app(app)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True)

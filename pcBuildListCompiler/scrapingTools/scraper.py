@@ -122,7 +122,7 @@ class Scraper:
                     for f in field:
                         specs[f] = value
                 else:
-                    specs[field] = value
+                    specs[field] = valuecro
 
         logger.info("Extracted %d specs for %s", len(specs), componentType)
         return specs

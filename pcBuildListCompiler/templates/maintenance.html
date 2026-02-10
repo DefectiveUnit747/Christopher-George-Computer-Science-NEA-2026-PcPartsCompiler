@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Under Maintenance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='particles/particles.min.js') }}"></script>
+    <script>
+        // Auto-refresh every 30 seconds to check if maintenance is over
+        setTimeout(() => location.reload(), 30000);
+    </script>
+</head>
+<body>
+    <div id="particles-js"></div>
+
+    <div class="maintenance-container">
+        <h1>🔧 Under Maintenance</h1>
+        <p>We're updating our PC parts database with the latest components.</p>
+        <p>We'll be back shortly!</p>
+        <div class="maintenance-spinner"></div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            particlesJS.load(
+                'particles-js',
+                '{{ url_for("static", filename="particles/particles-config.json") }}'
+            );
+        });
+    </script>
+</body>
+</html>

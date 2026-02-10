@@ -37,6 +37,10 @@ class Database:
     def createDatabaseTables(self):
         logger.info("Creating database tables from schema.sql")
 
+        tables_to_drop = ["cpu", "gpu", "ram", "motherboard", "psu", "storage", "cases"]
+        for table in tables_to_drop:
+            self._cursor.execute(f"DROP TABLE IF EXISTS {table}")
+
         schemaPath = os.path.join(os.path.dirname(__file__), "schema.sql")
         with open(schemaPath, "r") as file:
             self._cursor.executescript(file.read())
