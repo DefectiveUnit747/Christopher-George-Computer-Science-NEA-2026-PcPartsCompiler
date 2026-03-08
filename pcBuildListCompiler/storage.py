@@ -6,3 +6,4 @@ class Storage:
     def resetValues(cls):
         cls.gameData.clear()
         cls.buildPreferences.clear()
+

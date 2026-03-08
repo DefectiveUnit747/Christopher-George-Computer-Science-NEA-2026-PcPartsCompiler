@@ -75,20 +75,23 @@ PART_MAPPING = {
         "tierName": None
     }
 }
+
 TIER_MAPPING = {
     "low":    {"cpu": 0,  "gpu": 20, "ram": 10},
     "medium": {"cpu": 30, "gpu": 50, "ram": 20},
     "high":   {"cpu": 50, "gpu": 75, "ram": 35},
 }
+
 GPU_MAPPING = {
     "AMD": 3,
     "Nvidia": 40,
     "Intel": 33
 }
+
 COMPONENT_ORDER = ["gpu", "cpu", "motherboard", "ram", "storage", "psu", "case"]
 
-class Component: #POLYMORPISM
-    #Base component class
+
+class Component:
     def __init__(self, data: dict):
         self.data = data
 
@@ -101,7 +104,6 @@ class Component: #POLYMORPISM
         return self.data.get("finalScore", 0)
 
     def isCompatibleWith(self, build: dict) -> bool:
-        """Override in subclasses."""
         return True
 
 class CPU(Component):
@@ -150,12 +152,8 @@ class RAM(Component):
 
 class PSU(Component):
     def isCompatibleWith(self, build: dict) -> bool:
-        # PSU must handle the sum of tdpWatts in the current build
-        total_tdp = sum(
-            part.data.get("tdpWatts", 0)
-            for part in build.values()
-        )
-        return self.data.get("wattage", 0) >= total_tdp
+        totalTdp = sum(part.data.get("tdpWatts", 0) for part in build.values())
+        return self.data.get("wattage", 0) >= totalTdp
 
 class Case(Component):
     def isCompatibleWith(self, build: dict) -> bool:
@@ -168,8 +166,8 @@ class Case(Component):
         return True
 
 class Storage(Component):
-    # No special compatibility things needed
     pass
+
 
 COMPONENT_CLASSES = {
     "cpu": CPU,
@@ -180,6 +178,7 @@ COMPONENT_CLASSES = {
     "case": Case,
     "storage": Storage
 }
+
 
 class PcBuildCompiler:
     def __init__(self, budget, gpuPreference, aestheticsWeight, futureWeight, tier):
@@ -200,49 +199,39 @@ class PcBuildCompiler:
 
         filtered = []
         for i in range(len(partsList)):
-            partNumber1, partData1 = partsList[i]
-            isDominated = False
+            pn1, d1 = partsList[i]
+            dominated = False
 
             for j in range(len(partsList)):
                 if i == j:
                     continue
 
-                partNumber2, partData2 = partsList[j]
+                pn2, d2 = partsList[j]
 
-                if (partData2["finalScore"] > partData1["finalScore"] and
-                        partData2["price"] < partData1["price"]):
-                    isDominated = True
+                if d2["finalScore"] > d1["finalScore"] and d2["price"] < d1["price"]:
+                    dominated = True
                     break
 
-            if not isDominated:
-                filtered.append((partNumber1, partData1))
+            if not dominated:
+                filtered.append((pn1, d1))
 
         return filtered
 
     def _reformatScores(self, validDict):
         for key, value in validDict.items():
             score = float(value.get("score", 0))
-            efficiencyScore = float(value.get("scoreEfficiency", 0))
-            futureScore = float(value.get("scoreUpgradeability", 0))
-            performanceWeight = 5
-
-            weightedScore = (
-                performanceWeight * score +
-                self.aestheticsWeight * efficiencyScore +
-                self.futureWeight * futureScore
-            )
-
+            eff = float(value.get("scoreEfficiency", 0))
+            upg = float(value.get("scoreUpgradeability", 0))
+            weighted = 5 * score + self.aestheticsWeight * eff + self.futureWeight * upg
             value.pop("score", None)
             value.pop("scoreEfficiency", None)
             value.pop("scoreUpgradeability", None)
-            value["finalScore"] = weightedScore
-
+            value["finalScore"] = weighted
         return validDict
 
     def _mergeSortParts(self, parts):
         if len(parts) <= 1:
             return parts
-
         mid = len(parts) // 2
         left = self._mergeSortParts(parts[:mid])
         right = self._mergeSortParts(parts[mid:])
@@ -251,24 +240,19 @@ class PcBuildCompiler:
     def _mergeParts(self, left, right):
         merged = []
         i = j = 0
-
         while i < len(left) and j < len(right):
-            leftScore = left[i][1]["finalScore"]
-            rightScore = right[j][1]["finalScore"]
-
-            if leftScore >= rightScore:
+            if left[i][1]["finalScore"] >= right[j][1]["finalScore"]:
                 merged.append(left[i])
                 i += 1
             else:
                 merged.append(right[j])
                 j += 1
-
         merged.extend(left[i:])
         merged.extend(right[j:])
         return merged
 
     def loadValidParts(self, dbPath="computerParts.db"):
-        logger.info("Loading valid parts from DB")
+        logger.info("Loading valid parts")
 
         conn = sqlite3.connect(dbPath)
         conn.row_factory = sqlite3.Row
@@ -285,18 +269,19 @@ class PcBuildCompiler:
                 manufacturerId = GPU_MAPPING[self.gpuPreference]
                 query = f"SELECT {columns} FROM {table} WHERE score >= ? AND manufacturerId = ?"
                 values = c.execute(query, (minScore, manufacturerId)).fetchall()
+                logger.info("Applied GPU preference: %s", self.gpuPreference)
             else:
                 query = f"SELECT {columns} FROM {table} WHERE score >= ?"
                 values = c.execute(query, (minScore,)).fetchall()
 
+            logger.info("Loaded %d %s parts", len(values), key)
+
             validDict = {part["partNumber"]: dict(part) for part in values}
             formattedDict = self._reformatScores(validDict)
-
             sortedParts = self._mergeSortParts(list(formattedDict.items()))
             filteredParts = self._paretoFilter(sortedParts)
 
             validPartsDicts[key] = filteredParts
-            logger.info("Loaded %d parts for %s (after Pareto)", len(filteredParts), key)
 
         conn.close()
 
@@ -307,25 +292,17 @@ class PcBuildCompiler:
 
         self.validParts = wrapped
 
-    @staticmethod
-    def _getMaxScorePerComponent(partsList):
+    def _getMaxScorePerComponent(self, partsList):
         return partsList[0][1].finalScore if partsList else 0
 
-    @staticmethod
-    def _getMinPricePerComponent(partsList):
+    def _getMinPricePerComponent(self, partsList):
         return min(part.price for _, part in partsList) if partsList else math.inf
 
     def _lowerBoundPruning(self, remaining):
-        return sum(
-            self._getMinPricePerComponent(self.validParts[comp])
-            for comp in remaining
-        )
+        return sum(self._getMinPricePerComponent(self.validParts[comp]) for comp in remaining)
 
     def _branchAndBoundUpper(self, remaining):
-        return sum(
-            self._getMaxScorePerComponent(self.validParts[comp])
-            for comp in remaining
-        )
+        return sum(self._getMaxScorePerComponent(self.validParts[comp]) for comp in remaining)
 
     def _dfs(self, level, currentBuild, currentPrice, currentScore):
         if level == len(COMPONENT_ORDER):
@@ -343,10 +320,7 @@ class PcBuildCompiler:
         minBudgetFuture = self._lowerBoundPruning(remaining)
 
         for partNumber, part in self.validParts.get(currentType, []):
-            if currentType == "gpu":
-                newPrice = currentPrice + (1.2 * part.price)
-            else:
-                newPrice = currentPrice + part.price
+            newPrice = currentPrice + (1.2 * part.price if currentType == "gpu" else part.price)
 
             if newPrice > self.budget:
                 continue
@@ -364,16 +338,19 @@ class PcBuildCompiler:
             self._dfs(level + 1, newBuild, newPrice, newScore)
 
     def findBestBuild(self, dbPath="computerParts.db"):
+        logger.info("Starting build search")
         self.loadValidParts(dbPath)
         self.bestBuild = None
         self.bestScore = 0
         self.bestPrice = 0
 
-        self._dfs(
-            level=0,
-            currentBuild={},
-            currentPrice=0.0,
-            currentScore=0.0
-        )
+        self._dfs(0, {}, 0.0, 0.0)
+
+        logger.info("Build search complete: bestScore=%.2f bestPrice=%.2f",
+                    self.bestScore, self.bestPrice)
 
         return self.bestBuild, self.bestScore, self.bestPrice
+
+
+
+

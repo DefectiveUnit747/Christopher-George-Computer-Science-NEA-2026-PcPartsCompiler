@@ -19,12 +19,12 @@ class Config:
     SCHEDULER_TIMEZONE = "Europe/London"
 
 @app.before_request
-def check_maintenance():
-    if maintenanceMode and request.endpoint not in ["maintenance_page", "static"]:
+def checkMaintenance():
+    if maintenanceMode and request.endpoint not in ["maintenancePage", "static"]:
         return render_template("maintenance.html"), 503
 
 @app.route("/maintenance")
-def maintenance_page():
+def maintenancePage():
     return render_template("maintenance.html"), 503
 
 @app.route('/')
@@ -46,7 +46,7 @@ def searchForGame():
         return jsonify([])
 
     url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&search={query}"
-    response = requests.get(url)
+    response = requests.get(url, timeout = 6)
 
     if response.status_code != 200:
         return jsonify([])
@@ -150,8 +150,9 @@ def generateBuild():
 
 
 # @scheduler.task("cron", id="weekly_scrape", week="*", day_of_week="sun", hour=2, minute=0)
-def scheduled_scrape():
+def scheduledScrape():
     """Run scraper every Sunday at 2 AM - CURRENTLY DISABLED"""
+    global maintenanceMode
     try:
         maintenanceMode = True
         print("Maintenance mode ENABLED - Site is down")

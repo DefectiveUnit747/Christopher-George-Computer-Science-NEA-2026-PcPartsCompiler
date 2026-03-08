@@ -89,9 +89,17 @@ def normaliseRamScrapedValues(specs, name, manufacturerId, partNumber, price, ur
     return assignRamScore(normalisedSpecs)
 
 def normaliseStorageScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
-    capacity = int(specs["capacityGb"].split(" ")[0])
-    if capacity < 5:
-        capacity = capacity * 1000
+    raw = specs["capacityGb"].split()
+    value = float(raw[0])
+    unit = raw[1].lower()
+
+    if unit in ("tb", "tib"):
+        capacity = value * 1000
+    elif unit in ("mb", "mib"):
+        capacity = value / 1000
+    else:
+        capacity = value
+
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
@@ -108,21 +116,28 @@ def normaliseStorageScrapedValues(specs, name, manufacturerId, partNumber, price
     }
     return assignStorageScore(normalisedSpecs)
 
-def normaliseGpuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score): #FIX THE CORECLOCK ONE
-    print(specs)
-    mem = int(specs["memoryGb"].split(" ")[0])
-    memInGb = (math.floor(mem / 10 ** (math.floor(math.log10(mem)) - 1)) * 10 ** (math.floor(math.log10(mem)) - 1))//1000
-    coreClockBeforeNormalisation = specs["coreClock"].split(" ")
+def normaliseGpuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
+    rawMem = specs["memoryGb"].split()
+    memValue = float(rawMem[0])
+    memUnit = rawMem[1].lower()
+
+    if memUnit in ("mb", "mib"):
+        memInGb = memValue / 1024
+    elif memUnit in ("tb", "tib"):
+        memInGb = memValue * 1024
+    else:
+        memInGb = memValue
+
+    coreClockBefore = specs["coreClock"].split()
     coreClock = None
-    for word in coreClockBeforeNormalisation:
-        if word.isdigit():
-            coreClock = int(word)
+    for w in coreClockBefore:
+        if w.isdigit():
+            coreClock = int(w)
             break
-    tdp = (specs["tdpWatts"].split(" ")[0])
-    tdpWatts = ""
-    for i in tdp:
-        if i.isdigit():
-            tdpWatts += i
+
+    tdpRaw = specs["tdpWatts"].split()[0]
+    tdpDigits = "".join(c for c in tdpRaw if c.isdigit())
+
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
@@ -134,9 +149,9 @@ def normaliseGpuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
         "scoreUpgradeability": 0,
         "memoryGb": memInGb,
         "coreClock": coreClock,
-        "memoryType": (specs["memoryType"]).upper(),
-        "tdpWatts": int(tdpWatts),
-        "lengthMm": float(specs["length"].split(" ")[0])
+        "memoryType": specs["memoryType"].upper(),
+        "tdpWatts": int(tdpDigits),
+        "lengthMm": float(specs["length"].split()[0])
     }
     return assignGpuScore(normalisedSpecs)
 
@@ -388,3 +403,5 @@ def featureScaling(value, minValue, maxValue, maxScore): #MaxScore is like the p
     if value >= maxValue:
         return maxScore
     return ((value - minValue) / (maxValue - minValue)) * maxScore
+
+

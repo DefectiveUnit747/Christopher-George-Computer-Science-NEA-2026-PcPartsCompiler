@@ -37,8 +37,8 @@ class Database:
     def createDatabaseTables(self):
         logger.info("Creating database tables from schema.sql")
 
-        tables_to_drop = ["cpu", "gpu", "ram", "motherboard", "psu", "storage", "cases"]
-        for table in tables_to_drop:
+        tablesToDrop = ["cpu", "gpu", "ram", "motherboard", "psu", "storage", "cases"]
+        for table in tablesToDrop:
             self._cursor.execute(f"DROP TABLE IF EXISTS {table}")
 
         schemaPath = os.path.join(os.path.dirname(__file__), "schema.sql")
@@ -70,6 +70,10 @@ class Database:
             if name is not None
         }
 
+        if not result:  # ← ADDED
+            logger.error("Manufacturer table is empty!")
+            raise ValueError("No manufacturers found in database")
+
         logger.info("Loaded %d manufacturers", len(result))
         return result
 
@@ -79,7 +83,7 @@ class Database:
         keys = ", ".join(data.keys())
         placeholders = ", ".join(["?"] * len(data))
         values = tuple(data.values())
-        query = f"INSERT INTO {table} ({keys}) VALUES ({placeholders})"
+        query = f"INSERT OR REPLACE INTO {table} ({keys}) VALUES ({placeholders})"
 
         self._cursor.execute(query, values)
         self._conn.commit()
@@ -89,4 +93,3 @@ class Database:
     def close(self):
         logger.info("Closing database connection")
         self._conn.close()
-
