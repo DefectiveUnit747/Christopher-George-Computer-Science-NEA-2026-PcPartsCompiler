@@ -1,269 +1,279 @@
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
 import sqlite3
+import logging
+import os
+from pcBuildListCompiler.databasing.createDatabase import Database
 
+logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(message)s")
+logger = logging.getLogger()
 
-class TestDatabaseOperations(unittest.TestCase):
-    """Unit tests for Database operations using mocks - no actual DB calls"""
+SCHEMA_PATH = os.path.join(os.path.dirname(__file__), '..', 'databasing', 'schema.sql')
+
+class TestCreateDatabase(unittest.TestCase):
 
     def setUp(self):
-        """Set up mocked Database instance"""
+        logger.info(f"Running {self._testMethodName}")
+        self.db = Database.__new__(Database)
+        self.db._conn = sqlite3.connect(":memory:")
+        self.db._cursor = self.db._conn.cursor()
+        self.db._cursor.execute("PRAGMA foreign_keys = ON;")
 
-        # Patch sqlite3.connect in the target module
-        self.connect_patcher = patch(
-            'pcBuildListCompiler.databasing.createDatabase.sqlite3.connect'
-        )
-        mockConnect = self.connect_patcher.start()
-        self.addCleanup(self.connect_patcher.stop)
+    def testDropsComponentTablesButPreservesManufacturer(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('AMD')")
+        self.db._cursor.execute("INSERT INTO cpu (partNumber, name) VALUES ('AMD-001', 'Ryzen 7')")
+        self.db._conn.commit()
+        logger.info("Inserted AMD into manufacturer and AMD-001 into cpu")
 
-        # Create connection and cursor mocks
-        self.mockConn = MagicMock()
-        self.mockCursor = MagicMock()
-        self.mockConn.cursor.return_value = self.mockCursor
-        mockConnect.return_value = self.mockConn
+        self.db.createDatabaseTables()
 
-        # Import Database AFTER patch is active
-        from pcBuildListCompiler.databasing.createDatabase import Database
-        self.db = Database()
+        self.db._cursor.execute("SELECT COUNT(*) FROM manufacturer")
+        manufacturerCount = self.db._cursor.fetchone()[0]
+        logger.info(f"Manufacturer rows after recreate: {manufacturerCount}")
+        self.assertEqual(manufacturerCount, 1)
 
-    def test_createDatabaseTablesDropsComponentTablesButPreservesManufacturer(self):
-        """Test #1: createDatabaseTables() drops component tables but preserves manufacturer"""
+        self.db._cursor.execute("SELECT COUNT(*) FROM cpu")
+        cpuCount = self.db._cursor.fetchone()[0]
+        logger.info(f"CPU rows after recreate: {cpuCount}")
+        self.assertEqual(cpuCount, 0)
 
-        mockSchemaContent = "CREATE TABLE manufacturer (...); CREATE TABLE cpu (...);"
+    def testMakesAllTheTablesFromSchema(self):
+        self.db.createDatabaseTables()
+        logger.info("Called createDatabaseTables()")
 
-        with patch('builtins.open', mock_open(read_data=mockSchemaContent)):
-            self.db.createDatabaseTables()
+        tables = ["cpu", "gpu", "ram", "motherboard", "psu", "storage", "cases", "manufacturer"]
+        self.db._cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        actualTables = [row[0] for row in self.db._cursor.fetchall()]
+        logger.info(f"Tables found in database: {actualTables}")
 
-        # Verify DROP TABLE was called 7 times (once per component table)
-        dropCalls = [
-            c for c in self.mockCursor.execute.call_args_list
-            if 'DROP TABLE IF EXISTS' in str(c)
-        ]
-        self.assertEqual(len(dropCalls), 7)
+        for table in tables:
+            self.assertIn(table, actualTables)
+            logger.info(f"Table '{table}' confirmed present")
 
-        # Verify schema was executed
-        self.mockCursor.executescript.assert_called_once()
-        self.mockConn.commit.assert_called()
+    def testAddInManufacturersAndDuplicatesHandled(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        listOfManufacturers = ["AMD", "Nvidia", "AMD", "Intel", "EVGA"]
+        logger.info(f"Inserting manufacturers: {listOfManufacturers}")
 
-    def test_createDatabaseTablesCreatesAllTables(self):
-        """Test #2: createDatabaseTables() creates all tables from schema.sql"""
+        self.db.addInManufacturers(listOfManufacturers)
 
-        mockSchemaContent = "CREATE TABLE manufacturer (...); CREATE TABLE cpu (...);"
+        self.db._cursor.execute("SELECT COUNT(*) FROM manufacturer")
+        count = self.db._cursor.fetchone()[0]
+        logger.info(f"Manufacturer count after insert: {count} (expected 4, AMD duplicate ignored)")
+        self.assertEqual(count, 4)
 
-        with patch('builtins.open', mock_open(read_data=mockSchemaContent)):
-            self.db.createDatabaseTables()
-
-        # Verify schema was executed with correct content
-        self.mockCursor.executescript.assert_called_with(mockSchemaContent)
-
-    def test_addInManufacturersInsertsAllAndHandlesDuplicates(self):
-        """Test #3: addInManufacturers() inserts all manufacturers and handles duplicates"""
-
-        # Reset to ignore any previous calls
-        self.mockCursor.reset_mock()
-
-        manufacturers = ["AMD", "Intel", "Nvidia"]
-        self.db.addInManufacturers(manufacturers)
-
-        # Should be called 3 times
-        self.assertEqual(self.mockCursor.execute.call_count, 3)
-
-        # Verify INSERT OR IGNORE was used
-        for callArgs in self.mockCursor.execute.call_args_list:
-            sql = callArgs[0][0]
-            self.assertIn("INSERT OR IGNORE", sql)
-
-        self.mockConn.commit.assert_called()
-
-    def test_getManufacturerMapReturnsCorrectLowercaseIdMapping(self):
-        """Test #4: getManufacturerMap() returns correct lowercase ID mapping"""
-
-        # Mock fetchall return
-        self.mockCursor.fetchall.return_value = [
-            (1, "AMD"),
-            (2, "Intel"),
-            (3, "Nvidia")
-        ]
-
-        # Reset to ignore earlier calls
-        self.mockCursor.reset_mock()
+    def testGetManufacturerMapReturnsCorrectLowercaseIdMapping(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('AMD')")
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('Nvidia')")
+        self.db._conn.commit()
+        logger.info("Inserted AMD and Nvidia into manufacturer table")
 
         result = self.db.getManufacturerMap()
+        logger.info(f"Manufacturer map returned: {result}")
 
-        # Verify SELECT was called once
-        self.assertEqual(self.mockCursor.execute.call_count, 1)
-        sql = self.mockCursor.execute.call_args[0][0]
-        self.assertIn("SELECT", sql)
+        self.assertIn("amd", result)
+        self.assertIn("nvidia", result)
+        self.assertIsInstance(result["amd"], int)
+        self.assertIsInstance(result["nvidia"], int)
+        self.assertEqual(result["amd"], 1)
+        self.assertEqual(result["nvidia"], 2)
 
-        # Verify lowercase mapping
-        self.assertEqual(result, {
-            "amd": 1,
-            "intel": 2,
-            "nvidia": 3
-        })
-        self.assertNotIn("AMD", result)
+    def testGetManufacturerMapRaisesValueErrorOnEmptyTable(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        logger.info("Manufacturer table is empty, expecting ValueError")
 
-    def test_insertComponentInsertsCpuWithParameterizedQuery(self):
-        """Test #5: insertComponent() inserts CPU with parameterized query"""
+        with self.assertRaises(ValueError) as context:
+            self.db.getManufacturerMap()
+        logger.info(f"ValueError raised as expected: {context.exception}")
+        self.assertIn("No manufacturers found", str(context.exception))
 
-        self.mockCursor.reset_mock()
-        self.mockConn.reset_mock()
+    def testInsertCPU(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('AMD')")
+        self.db._conn.commit()
+        self.db._cursor.execute("SELECT manufacturerId FROM manufacturer WHERE name='AMD'")
+        self.amdId = self.db._cursor.fetchone()[0]
+        logger.info(f"AMD manufacturerId: {self.amdId}")
 
-        cpuData = {
-            "partNumber": "CPU-001",
-            "name": "AMD Ryzen",
-            "price": 299.99,
-            "manufacturerId": 1,
-            "url": "url",
-            "score": 75.0,
-            "scoreEfficiency": 65.0,
-            "scoreUpgradeability": 80.0,
+        cpu = {
+            "partNumber": "AMD-001",
+            "name": "Ryzen 7 7800X3D",
+            "price": 399.99,
+            "manufacturerId": self.amdId,
+            "url": "https://www.cclonline.com/amd-ryzen-7-7800x3d",
+            "score": 85.0,
+            "scoreEfficiency": 70.0,
+            "scoreUpgradeability": 60.0,
             "coreCount": 8,
             "coreClock": 4.5,
-            "cache": 32,
+            "cache": 96,
             "threads": 16,
-            "tdpWatts": 105,
-            "socketId": 1,
-            "imagePath": "path"
+            "tdpWatts": 120,
+            "socketId": "AM5",
+            "imagePath": "images/cpu/AMD-001.jpg"
         }
+        logger.info(f"Inserting CPU: {cpu}")
 
-        self.db.insertComponent("cpu", cpuData)
+        self.db.insertComponent("cpu", cpu)
 
-        callArgs = self.mockCursor.execute.call_args
-        sql = callArgs[0][0]
-        params = callArgs[0][1]
+        self.db._cursor.execute("SELECT * FROM cpu WHERE partNumber='AMD-001'")
+        result = self.db._cursor.fetchone()
+        logger.info(f"Row retrieved from cpu table: {result}")
 
-        self.assertIn("INSERT", sql)
-        self.assertIn("cpu", sql)
-        self.assertIn("?", sql)
+        count = 0
+        for key, value in cpu.items():
+            logger.info(f"Checking {key}: expected={value}, actual={result[count]}")
+            self.assertEqual(value, result[count])
+            count += 1
 
-        self.assertEqual(len(params), len(cpuData))
-        self.assertIn(299.99, params)
+    def testInsertGPU(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('Nvidia')")
+        self.db._conn.commit()
+        self.db._cursor.execute("SELECT manufacturerId FROM manufacturer WHERE name='Nvidia'")
+        self.nvidiaId = self.db._cursor.fetchone()[0]
+        logger.info(f"Nvidia manufacturerId: {self.nvidiaId}")
 
-        self.mockConn.commit.assert_called_once()
-
-    def test_insertComponentInsertsGpuWithAllFields(self):
-        """Test #6: insertComponent() inserts GPU with all fields"""
-
-        self.mockCursor.reset_mock()
-        self.mockConn.reset_mock()
-
-        gpuData = {
-            "partNumber": "GPU-001",
-            "name": "RTX 4080",
-            "price": 899.99,
-            "manufacturerId": 2,
-            "url": "url",
-            "score": 95.0,
-            "scoreEfficiency": 75.0,
-            "scoreUpgradeability": 70.0,
-            "memoryGb": 16,
-            "coreClock": 2505,
+        gpu = {
+            "partNumber": "NV-001",
+            "name": "RTX 4070",
+            "price": 599.99,
+            "manufacturerId": self.nvidiaId,
+            "url": "https://www.cclonline.com/rtx-4070",
+            "score": 90.0,
+            "scoreEfficiency": 80.0,
+            "scoreUpgradeability": 50.0,
+            "memoryGb": 12,
+            "coreClock": 2475.0,
             "memoryType": "GDDR6X",
-            "tdpWatts": 320,
-            "lengthMm": 304,
-            "imagePath": "path"
+            "tdpWatts": 200,
+            "lengthMm": 336,
+            "imagePath": "images/gpu/NV-001.jpg"
+        }
+        logger.info(f"Inserting GPU: {gpu}")
+
+        self.db.insertComponent("gpu", gpu)
+
+        self.db._cursor.execute("SELECT * FROM gpu WHERE partNumber='NV-001'")
+        result = self.db._cursor.fetchone()
+        logger.info(f"Row retrieved from gpu table: {result}")
+
+        count = 0
+        for key, value in gpu.items():
+            logger.info(f"Checking {key}: expected={value}, actual={result[count]}")
+            self.assertEqual(value, result[count])
+            count += 1
+
+    def testDuplicatePartNumberRaisesIntegrityError(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('AMD')")
+        self.db._conn.commit()
+        self.db._cursor.execute("SELECT manufacturerId FROM manufacturer WHERE name='AMD'")
+        self.amdId = self.db._cursor.fetchone()[0]
+
+        cpu = {
+            "partNumber": "AMD-001",
+            "name": "Ryzen 7 7800X3D",
+            "price": 399.99,
+            "manufacturerId": self.amdId,
+            "url": "https://www.cclonline.com/amd-ryzen-7-7800x3d",
+            "score": 85.0,
+            "scoreEfficiency": 70.0,
+            "scoreUpgradeability": 60.0,
+            "coreCount": 8,
+            "coreClock": 4.5,
+            "cache": 96,
+            "threads": 16,
+            "tdpWatts": 120,
+            "socketId": "AM5",
+            "imagePath": "images/cpu/AMD-001.jpg"
         }
 
-        self.db.insertComponent("gpu", gpuData)
+        self.db.insertComponent("cpu", cpu)
+        logger.info(f"First insert of AMD-001 successful")
 
-        callArgs = self.mockCursor.execute.call_args
-        sql = callArgs[0][0]
-        params = callArgs[0][1]
+        try:
+            self.db._cursor.execute("INSERT OR FAIL INTO cpu (partNumber) VALUES ('AMD-001')")
+            self.db._conn.commit()
+            self.fail("Expected IntegrityError was not raised")
+        except sqlite3.IntegrityError as e:
+            logger.info(f"IntegrityError raised as expected: {e}")
 
-        self.assertIn("INSERT", sql)
-        self.assertIn("gpu", sql)
-        self.assertIn(16, params)
-        self.assertIn("GDDR6X", params)
-        self.assertIn(304, params)
+    def testInsertOrReplaceUpdatesExistingRow(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('AMD')")
+        self.db._conn.commit()
+        self.db._cursor.execute("SELECT manufacturerId FROM manufacturer WHERE name='AMD'")
+        self.amdId = self.db._cursor.fetchone()[0]
 
-    def test_insertComponentEnforcesPrimaryKeyConstraint(self):
-        """Test #7: insertComponent() enforces primary key constraint"""
+        cpu = {
+            "partNumber": "AMD-001",
+            "name": "Ryzen 7 7800X3D",
+            "price": 399.99,
+            "manufacturerId": self.amdId,
+            "url": "https://www.cclonline.com/amd-ryzen-7-7800x3d",
+            "score": 85.0,
+            "scoreEfficiency": 70.0,
+            "scoreUpgradeability": 60.0,
+            "coreCount": 8,
+            "coreClock": 4.5,
+            "cache": 96,
+            "threads": 16,
+            "tdpWatts": 120,
+            "socketId": "AM5",
+            "imagePath": "images/cpu/AMD-001.jpg"
+        }
 
-        cpuData = {
-            "partNumber": "CPU-DUP",
-            "name": "Test",
-            "price": 200.0,
-            "manufacturerId": 1,
-            "url": "url",
-            "score": 50.0,
-            "scoreEfficiency": 40.0,
-            "scoreUpgradeability": 30.0,
+        self.db.insertComponent("cpu", cpu)
+        logger.info(f"Inserted CPU with price={cpu['price']}")
+
+        cpu["price"] = 349.99
+        self.db.insertComponent("cpu", cpu)
+        logger.info(f"Re-inserted CPU with updated price={cpu['price']}")
+
+        self.db._cursor.execute("SELECT price FROM cpu WHERE partNumber='AMD-001'")
+        price = self.db._cursor.fetchone()[0]
+        logger.info(f"Price after INSERT OR REPLACE: {price} (expected 349.99)")
+        self.assertEqual(price, 349.99)
+
+    def testInsertCpuWithPriceAtZero(self):
+        self.db._cursor.executescript(open(SCHEMA_PATH).read())
+        self.db._cursor.execute("INSERT INTO manufacturer (name) VALUES ('AMD')")
+        self.db._conn.commit()
+        self.db._cursor.execute("SELECT manufacturerId FROM manufacturer WHERE name='AMD'")
+        self.amdId = self.db._cursor.fetchone()[0]
+
+        cpu = {
+            "partNumber": "AMD-002",
+            "name": "Ryzen 5 7600",
+            "price": 0,
+            "manufacturerId": self.amdId,
+            "url": "https://www.cclonline.com/amd-ryzen-5-7600",
+            "score": 70.0,
+            "scoreEfficiency": 60.0,
+            "scoreUpgradeability": 50.0,
             "coreCount": 6,
-            "coreClock": 4.2,
-            "cache": 32,
-            "threads": 12,
-            "tdpWatts": 65,
-            "socketId": 1,
-            "imagePath": "path"
-        }
-
-        self.mockCursor.execute.side_effect = sqlite3.IntegrityError("UNIQUE constraint failed")
-
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.db.insertComponent("cpu", cpuData)
-
-    def test_insertComponentEnforcesForeignKeyConstraint(self):
-        """Test #8: insertComponent() enforces foreign key constraint"""
-
-        cpuData = {
-            "partNumber": "CPU-BAD",
-            "name": "Test",
-            "price": 200.0,
-            "manufacturerId": 99999,
-            "url": "url",
-            "score": 50.0,
-            "scoreEfficiency": 40.0,
-            "scoreUpgradeability": 30.0,
-            "coreCount": 6,
-            "coreClock": 4.2,
-            "cache": 32,
-            "threads": 12,
-            "tdpWatts": 65,
-            "socketId": 1,
-            "imagePath": "path"
-        }
-
-        self.mockCursor.execute.side_effect = sqlite3.IntegrityError("FOREIGN KEY constraint failed")
-
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.db.insertComponent("cpu", cpuData)
-
-    def test_insertComponentHandlesDuplicatePartNumbers(self):
-        """Test #9: insertComponent() handles duplicate part numbers"""
-
-        cpuData = {
-            "partNumber": "DUPLICATE",
-            "name": "Test",
-            "price": 150.0,
-            "manufacturerId": 1,
-            "url": "url",
-            "score": 55.0,
-            "scoreEfficiency": 45.0,
-            "scoreUpgradeability": 35.0,
-            "coreCount": 4,
             "coreClock": 3.8,
-            "cache": 16,
-            "threads": 8,
-            "tdpWatts": 95,
-            "socketId": 1,
-            "imagePath": "path"
+            "cache": 32,
+            "threads": 12,
+            "tdpWatts": 65,
+            "socketId": "AM5",
+            "imagePath": "images/cpu/AMD-002.jpg"
         }
+        logger.info(f"Inserting CPU with price=0")
 
-        self.mockCursor.execute.side_effect = sqlite3.IntegrityError("UNIQUE constraint failed")
+        self.db.insertComponent("cpu", cpu)
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.db.insertComponent("cpu", cpuData)
+        self.db._cursor.execute("SELECT price FROM cpu WHERE partNumber='AMD-002'")
+        price = self.db._cursor.fetchone()[0]
+        logger.info(f"Price stored at zero: {price} (expected 0)")
+        self.assertEqual(price, 0)
 
-    def test_getManufacturerMapHandlesEmptyTable(self):
-        """Test #10: getManufacturerMap() handles empty manufacturer table"""
-
-        # Mock empty result
-        self.mockCursor.fetchall.return_value = []
-
-        with self.assertRaises(ValueError):
-            self.db.getManufacturerMap()
+    def tearDown(self):
+        self.db._conn.close()
+        logger.info(f"{self._testMethodName} torn down")
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main()

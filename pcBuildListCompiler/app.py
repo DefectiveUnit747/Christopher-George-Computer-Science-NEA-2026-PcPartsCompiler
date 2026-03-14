@@ -1,11 +1,10 @@
 from flask import Flask, render_template, redirect, jsonify, request
-from savedPreferences import *
-from savedPreferences import extractPreferences, saveGamePreference
-from storage import Storage
+from pcBuildListCompiler.savedPreferences import *
+from pcBuildListCompiler.savedPreferences import extractPreferences, saveGamePreference
+from pcBuildListCompiler.storage import Storage
+from pcBuildListCompiler.createBuildList import PcBuildCompiler
 import requests
-from createBuildList import PcBuildCompiler
 from flask_apscheduler import APScheduler
-import time
 
 app = Flask(__name__)
 app.secret_key = "SuperSecretKeyTEMPORARY"
@@ -46,7 +45,11 @@ def searchForGame():
         return jsonify([])
 
     url = f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&search={query}"
-    response = requests.get(url, timeout = 6)
+
+    try:
+        response = requests.get(url, timeout=6)
+    except requests.exceptions.Timeout:
+        return jsonify([])
 
     if response.status_code != 200:
         return jsonify([])

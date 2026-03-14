@@ -33,7 +33,6 @@ formFactorWeights = {
 }
 
 def normaliseCpuScrapedValues(specs, name, manufacturerId, partNumber, price, url, score):
-    print(specs)
     normalisedSpecs = {
         "partNumber": partNumber,
         "name": name,
@@ -47,7 +46,7 @@ def normaliseCpuScrapedValues(specs, name, manufacturerId, partNumber, price, ur
         "coreClock": float(specs["coreClock"].split(" ")[0]),
         "cache": float(specs["cache"].split(" ")[0]),
         "threads": int(specs["threads"]),
-        "tdpWatts": int(specs["tdp"].split(" ")[0]) if isinstance(specs["tdp"], str) else int(specs["tdp"][0]),
+        "tdpWatts": int(specs["tdp"].split(" ")[0]) if isinstance(specs["tdp"], str) else int(specs["tdp"][0].split(" ")[0]),
         "socketId": specs["socket"]
     }
     return assignCpuScore(normalisedSpecs)

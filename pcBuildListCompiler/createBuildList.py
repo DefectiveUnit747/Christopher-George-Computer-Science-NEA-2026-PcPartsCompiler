@@ -2,7 +2,7 @@ import sqlite3
 import math
 import logging
 
-from compatibilityFunctions import *
+from pcBuildListCompiler.compatibilityFunctions import *
 
 logger = logging.getLogger(__name__)
 

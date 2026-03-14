@@ -12,15 +12,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-manufacturers = [
-    "ADATA", "Aerocool", "AMD", "Antec", "ASRock", "ASUS", "be quiet!", "Biostar", "CaseLabs", "Colorful",
-    "Cooler Master", "Corsair", "Cougar", "Crucial", "Deepcool", "ECS", "Enermax", "EVGA", "Foxconn", "Fractal Design",
-    "Gainward", "GALAX", "Gigabyte", "G.Skill", "HIS", "Hitachi", "In Win", "Inno3D", "Intel", "Kingston",
-    "Lian Li", "Matrox", "MSI", "Mushkin", "NVIDIA", "NZXT", "Palit", "Patriot", "Phanteks", "Plextor",
-    "PNY", "PowerColor", "Rosewill", "Sapphire", "Samsung", "SanDisk", "Seagate", "Seasonic", "SilverStone", "SK Hynix",
-    "Super Flower", "Supermicro", "TeamGroup", "Thermaltake", "Toshiba", "VisionTek", "Western Digital", "XFX", "Zotac"
-                ]
-
 class Database:
     def __init__(self):
         ROOT_DIRECTORY = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
