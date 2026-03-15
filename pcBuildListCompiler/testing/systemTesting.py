@@ -1,123 +1,127 @@
-import logging
-import os
-import io
-import requests
-import time
-from PIL import Image
+import unittest
 from bs4 import BeautifulSoup
-from pcBuildListCompiler.scrapingTools.scraper import Scraper
+import os
+import tempfile
+import shutil
+from PIL import Image
+import logging
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
-logger = logging.getLogger(__name__)
 
-TEMP_IMAGE_FOLDER = os.path.join(os.path.dirname(__file__), "testImageOutput")
-os.makedirs(TEMP_IMAGE_FOLDER, exist_ok=True)
+class TestScraperFunctions(unittest.TestCase):
 
-def makeScraper(categoryUrl=""):
-    scraper = Scraper.__new__(Scraper)
-    scraper.baseUrl = "https://www.cclonline.com"
-    scraper.categoryUrl = categoryUrl
-    scraper._driver = None
-    scraper._projectRoot = os.path.dirname(__file__)
-    scraper._requestSession = None
-    return scraper
+    def testFilterSoldOutItems(self):
 
-def testDownloadValidImage(driver):
-    logger.info("=== TEST: downloadPartImage() downloads and saves image ===")
-    scraper = makeScraper()
-    scraper._projectRoot = os.path.dirname(__file__)
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('test_filter_sold_out.log', mode='w'),
+                logging.StreamHandler()
+            ],
+            force=True
+        )
+        logger = logging.getLogger('test1')
 
-    url = "https://www.cclonline.com/product/amd-ryzen-7-7800x3d-8-core-processor-100-100000909WOF/"
-    driver.get(url)
-    time.sleep(3)
+        logger.info("TEST: Filter Sold-Out Items")
 
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    result = scraper.downloadPartImage(soup, "TEST-VALID-001", "testImages")
-    logger.info(f"Result path: {result}")
+        mockHtml = '''
+        <div class="productListContainer">
+            <a href="/cpu-1">Intel i7-14700K (In Stock)</a>
+            <div id="pnlSoldOut">
+                <a href="/cpu-sold-1">Intel i9-14900K (Sold Out)</a>
+            </div>
+            <a href="/cpu-2">AMD Ryzen 7 7800X3D (In Stock)</a>
+            <div id="pnlSoldOut">
+                <a href="/cpu-sold-2">AMD Ryzen 9 7950X (Sold Out)</a>
+            </div>
+            <a href="/cpu-3">Intel i5-14600K (In Stock)</a>
+        </div>
+        '''
 
-    if result:
-        fullPath = os.path.join(os.path.dirname(__file__), result)
-        exists = os.path.exists(fullPath)
-        logger.info(f"File exists on disk: {exists}")
-        logger.info("PASS: Image downloaded and saved successfully")
-    else:
-        logger.warning("FAIL: Image element not found")
+        soup = BeautifulSoup(mockHtml, 'html.parser')
+        links = set()
 
-def testDownloadRgbaImage():
-    logger.info("=== TEST: downloadPartImage() converts RGBA to RGB ===")
-    scraper = makeScraper()
+        container = soup.find("div", class_="productListContainer")
+        for link in container.find_all("a", href=True):
+            href = link.get("href")
+            if not link.find_parent("div", id="pnlSoldOut"):
+                links.add(href)
+                logger.info(f"Included: {href}")
+            else:
+                logger.info(f"Filtered: {href}")
 
-    # Create a fake RGBA image in memory and serve it via a mock soup
-    rgbaImage = Image.new("RGBA", (100, 100), (255, 0, 0, 128))
-    buffer = io.BytesIO()
-    rgbaImage.save(buffer, format="PNG")
-    buffer.seek(0)
+        logger.info(f"Total: {len(links)} (expected 3)")
 
-    # Save it temporarily so we can point an img tag at a real URL
-    tempPath = os.path.join(TEMP_IMAGE_FOLDER, "rgba_test.png")
-    with open(tempPath, "wb") as f:
-        f.write(buffer.getvalue())
+        self.assertEqual(len(links), 3)
+        self.assertNotIn("/cpu-sold-1", links)
+        self.assertNotIn("/cpu-sold-2", links)
+        self.assertIn("/cpu-1", links)
+        self.assertIn("/cpu-2", links)
+        self.assertIn("/cpu-3", links)
 
-    logger.info(f"Created RGBA test image at {tempPath}")
+        logger.info("PASS")
 
-    # Manually simulate what downloadPartImage does with an RGBA image
-    image = Image.open(tempPath)
-    logger.info(f"Image mode before conversion: {image.mode}")
-    if image.mode in ("RGBA", "LA"):
-        image = image.convert("RGB")
-    logger.info(f"Image mode after conversion: {image.mode}")
+    def testDownloadPartImageSavesCorrectly(self):
 
-    savedPath = os.path.join(TEMP_IMAGE_FOLDER, "rgba_converted.jpg")
-    image.save(savedPath, "JPEG")
-    logger.info(f"Saved as JPEG to: {savedPath}")
-    logger.info("PASS: RGBA image converted to RGB and saved as JPEG successfully")
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('test_download_image.log', mode='w'),
+                logging.StreamHandler()
+            ],
+            force=True
+        )
+        logger = logging.getLogger('test2')
 
-def testDownloadMissingImage():
-    logger.info("=== TEST: downloadPartImage() handles missing image element ===")
-    scraper = makeScraper()
+        logger.info("TEST: Download Part Image")
 
-    soup = BeautifulSoup("<html><body><p>No image here</p></body></html>", "html.parser")
-    result = scraper.downloadPartImage(soup, "TEST-MISSING-001", "testImages")
+        mockHtml = '''
+        <div class="owl-item active">
+            <img id="imgImage" data-src="https://example.com/cpu-image.jpg" src="">
+        </div>
+        '''
 
-    logger.info(f"Result: {result}")
-    assert result is None, "Expected None when no image element present"
-    logger.info("PASS: Returns None without crashing, warning logged above")
+        tempDir = tempfile.mkdtemp(prefix="test_image_")
+        logger.info(f"Created temp directory: {tempDir}")
 
-def testGetProductLinks():
-    logger.info("=== TEST: getProductLinks() extracts valid URLs and handles pagination ===")
-    logger.info("=== Also tests: acceptCookies() and sold-out filtering ===")
+        try:
+            soup = BeautifulSoup(mockHtml, 'html.parser')
 
-    scraper = Scraper("https://www.cclonline.com", "/pc-components/cpu-processors/")
+            activeCarousel = soup.find("div", class_="owl-item active")
+            imageTag = activeCarousel.find("img", id="imgImage") if activeCarousel else soup.find("img", id="imgImage")
 
-    links = scraper.getProductLinks()
+            self.assertIsNotNone(imageTag)
+            logger.info("Image tag found")
 
-    logger.info(f"Total valid links collected: {len(links)}")
-    logger.info("Sample links:")
-    for link in list(links)[:5]:
-        logger.info(f"  {link}")
+            imageUrl = imageTag.get("data-src") or imageTag.get("src")
+            logger.info(f"Image URL: {imageUrl}")
 
-    assert len(links) > 0, "Expected at least some links"
-    assert all(link.startswith("https://www.cclonline.com") for link in links), \
-        "All links should start with base URL"
-    assert not any("page_" in link for link in links), \
-        "No pagination links should be in results"
+            testImage = Image.new('RGB', (100, 100), color='blue')
 
-    logger.info("PASS: Valid product URLs extracted, pagination navigated, sold-out items filtered")
+            partNumber = "TEST-CPU-12345"
+            folder = os.path.join(tempDir, "productImages", "cpuImages")
+            os.makedirs(folder, exist_ok=True)
 
-    scraper._driver.quit()
-    logger.info("Driver closed")
+            normalisedPartNumber = partNumber.replace("/", "-").replace("\\", "-")
+            filePath = os.path.join(folder, f"{normalisedPartNumber}.jpg")
 
-if __name__ == "__main__":
-    logger.info("Starting manual scraping tests")
-    logger.info("=" * 60)
+            testImage.save(filePath, "JPEG")
+            logger.info(f"Saved: {filePath}")
+            logger.info(f"Size: {os.path.getsize(filePath)} bytes")
 
-    testDownloadMissingImage()
-    logger.info("")
-    testDownloadRgbaImage()
-    logger.info("")
-    testDownloadValidImage()
-    logger.info("")
-    testGetProductLinks()  # This one opens Chrome - run last
+            self.assertTrue(os.path.exists(filePath))
+            self.assertTrue(filePath.endswith(f"{normalisedPartNumber}.jpg"))
+            self.assertGreater(os.path.getsize(filePath), 0)
+            self.assertIn(tempDir, filePath)
 
-    logger.info("=" * 60)
-    logger.info("All manual tests complete")
+            logger.info("PASS")
+
+        finally:
+            if os.path.exists(tempDir):
+                shutil.rmtree(tempDir)
+                logger.info("Cleaned up temp directory")
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

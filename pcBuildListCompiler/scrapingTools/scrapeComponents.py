@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 from pcBuildListCompiler.databasing.createDatabase import *
 from pcBuildListCompiler.scrapingTools.dataNormalisationFunctions import *
-from scraper import Scraper
+from pcBuildListCompiler.scrapingTools.scraper import Scraper
 from pcBuildListCompiler.databasing.createDatabase import Database
 import logging
 
