@@ -11,7 +11,7 @@ function saveValues(budgetValue, efficiencyValue, futureValue) {
 
     const valuesToSave = {
         budget: budgetValue,
-        aesthetics: efficiencyValue,
+        efficiency: efficiencyValue,
         futurePref: futureValue,
         gpuPreference: selectedBrand
     };
@@ -119,10 +119,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 const budget = budgetSlider.value;
-                const aesthetics = efficiencySlider.value;
+                const efficiency = efficiencySlider.value;
                 const future = futureSlider.value;
 
-                saveValues(budget, aesthetics, future)
+                saveValues(budget, efficiency, future)
                     .then(() => {
                         return fetch("/saveGame", {
                             method: "POST",

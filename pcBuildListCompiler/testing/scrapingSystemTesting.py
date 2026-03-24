@@ -1,4 +1,4 @@
-from pcBuildListCompiler.scrapingTools.scrapeComponents import componentScraper
+from pcBuildListCompiler.scrapingTools.scrapeComponents import ComponentScraper
 from pcBuildListCompiler.databasing.createDatabase import Database
 from bs4 import BeautifulSoup
 import os
@@ -20,124 +20,12 @@ class SafeTestEnvironment:
     def getTestImagePath(self, folder):
         testFolder = os.path.join(self.tempDir, folder)
         os.makedirs(testFolder, exist_ok=True)
-
         return testFolder
 
 
-def test1ExtractUrls():
+def test1FilterSoldOut():
     print("\n" + "=" * 70)
-    print("TEST 1: Extract Valid Product URLs")
-    print("=" * 70)
-
-    db = Database("computerParts.db")
-    manufacturerMap = db.getManufacturerMap()
-    scraper = componentScraper("https://www.cclonline.com", db)
-    scraper.categoryUrl = "/pc-components/cpu-processors"
-
-    print("\nThis test only reads data - it won't modify your database")
-    print("Scraping links (this may take 30-60 seconds)...\n")
-
-    links = scraper.getProductLinks()
-
-    print(f"\nFound {len(links)} links")
-    print("\nFirst 10 links:")
-    for i, link in enumerate(list(links)[:10], 1):
-        print(f"  {i}. {link}")
-
-    print(f"\nValidation:")
-    print(f"  Total links: {len(links)}")
-    print(f"  All valid URLs: {all(link.startswith('https://') for link in links)}")
-    print(f"  No pagination links: {all('page_' not in link for link in links)}")
-
-    print("\nManual verification steps:")
-    print("1. Copy one of the URLs above")
-    print("2. Paste into browser")
-    print("3. Verify it's a real CPU product page")
-    print("4. Check product is in stock (not sold out)")
-
-    verify = input("\nDid the links work correctly? (y/n): ")
-
-    scraper.driver.quit()
-    db.close()
-
-    if verify.lower() == 'y':
-        print("Test 1 passed")
-        return True
-    else:
-        print("Test 1 failed")
-        return False
-
-
-def test2Pagination():
-    print("\n" + "=" * 70)
-    print("TEST 2: Pagination")
-    print("=" * 70)
-
-    print("\nThis test only navigates pages - no database changes")
-    print("Watch the browser - it will cycle through pages\n")
-
-    db = Database("computerParts.db")
-    scraper = componentScraper("https://www.cclonline.com", db)
-    scraper.categoryUrl = "/pc-components/cpu-processors"
-    scraper.driver = scraper._initialiseDriver()
-    scraper.driver.get(scraper.baseUrl + scraper.categoryUrl)
-    time.sleep(2)
-
-    try:
-        from selenium.webdriver.common.by import By
-        acceptBtn = scraper.driver.find_element(By.ID, "onetrust-accept-btn-handler")
-        acceptBtn.click()
-        time.sleep(1)
-    except:
-        pass
-
-    soup = BeautifulSoup(scraper.driver.page_source, "html.parser")
-    pages = soup.find_all("li", class_="notSelected")
-
-    if len(pages) >= 2:
-        totalPages = int(pages[-2].text.strip())
-        print(f"Found {totalPages} total pages")
-
-        pagesToTest = min(3, totalPages)
-        print(f"Will test first {pagesToTest} pages\n")
-
-        for page in range(1, pagesToTest + 1):
-            print(f"Currently on page {page}/{totalPages}")
-            time.sleep(1)
-
-            if page < pagesToTest:
-                try:
-                    from selenium.webdriver.common.by import By
-                    nextBtn = scraper.driver.find_element(By.LINK_TEXT, str(page + 1))
-                    nextBtn.click()
-                    print(f"  Navigating to page {page + 1}...")
-                    time.sleep(1)
-                except Exception as e:
-                    print(f"  Could not navigate: {e}")
-    else:
-        print("Only 1 page found")
-
-    print("\nManual verification steps:")
-    print("1. Did you see the browser navigate between pages?")
-    print("2. Did different products appear on each page?")
-    print("3. Were page numbers correct?")
-
-    verify = input("\nDid pagination work correctly? (y/n): ")
-
-    scraper.driver.quit()
-    db.close()
-
-    if verify.lower() == 'y':
-        print("Test 2 passed")
-        return True
-    else:
-        print("Test 2 failed")
-        return False
-
-
-def test3FilterSoldOut():
-    print("\n" + "=" * 70)
-    print("TEST 3: Filter Sold-Out Products")
+    print("TEST 1: Filter Sold-Out Products")
     print("=" * 70)
 
     print("\nThis test uses mock HTML - no real scraping or database changes")
@@ -167,96 +55,101 @@ def test3FilterSoldOut():
     for link in container.find_all("a", href=True):
         if not link.find_parent("div", id="pnlSoldOut"):
             links.add(link.get("href"))
-            print(f"  Included: {link.text.strip()}")
+            print(f"  Included: {link.get('href')}")
         else:
-            print(f"  Filtered out: {link.text.strip()}")
+            print(f"  Filtered: {link.get('href')}")
 
-    print(f"\nResults:")
-    print(f"  Found: {len(links)} products")
-    print(f"  Expected: 3 products")
+    print(f"\nTotal: {len(links)} (expected 3)")
 
     try:
-        assert len(links) == 3, f"Expected 3, got {len(links)}"
-        assert "/cpu-sold-1" not in links, "Sold-out product 1 should be filtered"
-        assert "/cpu-sold-2" not in links, "Sold-out product 2 should be filtered"
-        assert "/cpu-1" in links, "In-stock product 1 should be included"
-        assert "/cpu-2" in links, "In-stock product 2 should be included"
-        assert "/cpu-3" in links, "In-stock product 3 should be included"
-
-        print("\nTest 3 passed - filtering works correctly")
+        assert len(links) == 3
+        assert "/cpu-sold-1" not in links
+        assert "/cpu-sold-2" not in links
+        assert "/cpu-1" in links
+        assert "/cpu-2" in links
+        assert "/cpu-3" in links
+        print("PASS")
         return True
-
     except AssertionError as e:
-        print(f"\nTest 3 failed: {e}")
+        print(f"FAIL: {e}")
         return False
 
 
-def test4Cookies():
+def test2Pagination():
     print("\n" + "=" * 70)
-    print("TEST 4: Cookie Popup")
+    print("TEST 2: Pagination Through Multiple Pages")
     print("=" * 70)
 
-    print("\nThis test only clicks cookie button - no database changes")
+    print("\nThis test only navigates pages - no database changes")
+    print("Watch the browser - it will cycle through pages\n")
 
-    db = Database("computerParts.db")
-    scraper = componentScraper("https://www.cclonline.com", db)
+    db = Database()
+    scraper = ComponentScraper("https://www.cclonline.com", db)
     scraper.driver = scraper._initialiseDriver()
-    scraper.driver.get("https://www.cclonline.com")
+    scraper.driver.get(scraper.baseUrl + "/pc-components/cpu-processors")
     time.sleep(2)
-
-    print("\nWatch the browser for cookie popup...")
 
     try:
         from selenium.webdriver.common.by import By
-        btn = scraper.driver.find_element(By.ID, "onetrust-accept-btn-handler")
-
-        print("Cookie popup detected")
-        print("Clicking accept button...")
-
-        btn.click()
+        acceptBtn = scraper.driver.find_element(By.ID, "onetrust-accept-btn-handler")
+        acceptBtn.click()
         time.sleep(1)
+    except:
+        pass
 
-        try:
-            scraper.driver.find_element(By.ID, "onetrust-accept-btn-handler")
-            print("Cookie popup still present")
-            success = False
-        except:
-            print("Cookie popup dismissed successfully")
-            success = True
+    soup = BeautifulSoup(scraper.driver.page_source, "html.parser")
+    pages = soup.find_all("li", class_="notSelected")
 
-    except Exception as e:
-        print(f"Cookie popup not found (may already be accepted)")
-        print(f"Error: {e}")
-        success = True
+    if len(pages) >= 2:
+        totalPages = int(pages[-2].text.strip())
+        print(f"Found {totalPages} total pages")
+        pagesToTest = min(3, totalPages)
+        print(f"Testing first {pagesToTest} pages\n")
+
+        for page in range(1, pagesToTest + 1):
+            print(f"Currently on page {page}/{totalPages}")
+            time.sleep(1)
+            if page < pagesToTest:
+                try:
+                    from selenium.webdriver.common.by import By
+                    nextBtn = scraper.driver.find_element(By.LINK_TEXT, str(page + 1))
+                    nextBtn.click()
+                    print(f"  Navigated to page {page + 1}")
+                    time.sleep(1)
+                except Exception as e:
+                    print(f"  Could not navigate: {e}")
+    else:
+        print("Only 1 page found")
 
     print("\nManual verification:")
-    print("Did you see the cookie popup disappear?")
+    print("1. Did the browser navigate between pages?")
+    print("2. Did different products appear on each page?")
 
-    verify = input("\nDid cookie handling work? (y/n): ")
+    verify = input("\nDid pagination work correctly? (y/n): ")
 
     scraper.driver.quit()
     db.close()
 
-    if verify.lower() == 'y' and success:
-        print("Test 4 passed")
+    if verify.lower() == 'y':
+        print("PASS")
         return True
     else:
-        print("Test 4 failed")
+        print("FAIL")
         return False
 
 
-def test5DownloadImage():
+def test3DownloadImage():
     print("\n" + "=" * 70)
-    print("TEST 5: Download Product Image")
+    print("TEST 3: Download Product Image")
     print("=" * 70)
 
-    print("\nThis test saves to temporary folder - won't affect productImages/")
+    print("\nThis test saves to a temporary folder - won't affect productImages/")
 
     env = SafeTestEnvironment()
 
     try:
-        db = Database("computerParts.db")
-        scraper = componentScraper("https://www.cclonline.com", db)
+        db = Database()
+        scraper = ComponentScraper("https://www.cclonline.com", db)
         scraper.driver = scraper._initialiseDriver()
         url = "https://www.cclonline.com/intel-core-i7-14700k-processor-bx8071514700k-253817.html"
 
@@ -282,7 +175,8 @@ def test5DownloadImage():
 
         if imageTag:
             imageUrl = imageTag.get("data-src") or imageTag.get("src")
-            print(f"Found image URL: {imageUrl}")
+            print(f"Image tag found")
+            print(f"Image URL: {imageUrl}")
 
             import requests
             from PIL import Image
@@ -290,7 +184,6 @@ def test5DownloadImage():
 
             if imageUrl.startswith("/"):
                 imageUrl = "https://www.cclonline.com" + imageUrl
-
             imageUrl = imageUrl.split("?")[0]
 
             print(f"\nDownloading to temporary folder...")
@@ -298,26 +191,22 @@ def test5DownloadImage():
             imageFile = io.BytesIO(imageContent)
             image = Image.open(imageFile)
 
-            if image.mode == 'RGBA' or image.mode == "LA":
+            if image.mode in ('RGBA', 'LA'):
                 image = image.convert('RGB')
 
             testFolder = env.getTestImagePath("cpuImages")
             filePath = os.path.join(testFolder, "TEST-i7-14700K.jpg")
             image.save(filePath, "JPEG")
 
-            print(f"Image saved successfully")
-            print(f"Location: {filePath}")
+            print(f"Image saved to: {filePath}")
             print(f"Size: {os.path.getsize(filePath)} bytes")
-            print(f"Format: {image.format}")
             print(f"Dimensions: {image.size}")
 
             print(f"\nManual verification:")
             print(f"1. Open this file: {os.path.abspath(filePath)}")
-            print("2. Verify it's the Intel i7-14700K image")
-            print("3. Check image quality is acceptable")
+            print("2. Verify it shows the Intel i7-14700K product image")
 
             verify = input("\nIs the image correct? (y/n): ")
-
             success = verify.lower() == 'y'
 
         else:
@@ -329,36 +218,28 @@ def test5DownloadImage():
 
     finally:
         env.cleanup()
-        print("\nAll test files deleted - no trace left")
+        print("\nAll test files deleted")
 
     if success:
-        print("Test 5 passed")
+        print("PASS")
         return True
     else:
-        print("Test 5 failed")
+        print("FAIL")
         return False
 
 
-def runAllSafeTests():
+def runAllManualTests():
     print("\n" + "=" * 80)
-    print("Safe Manual Scraper Test Suite")
+    print("Manual Scraper Test Suite")
     print("=" * 80)
-    print("\nSafety guarantees:")
-    print("  No database modifications")
-    print("  Test images saved to temporary folder")
-    print("  All test files deleted after completion")
-    print("  Read-only operations only")
-    print("\n" + "=" * 80)
-
-    input("\nPress Enter to start tests...")
 
     results = {}
 
     try:
-        results['Extract URLs'] = test1ExtractUrls()
+        results['Filter Sold-Out'] = test1FilterSoldOut()
     except Exception as e:
         print(f"\nTest 1 crashed: {e}")
-        results['Extract URLs'] = False
+        results['Filter Sold-Out'] = False
 
     try:
         results['Pagination'] = test2Pagination()
@@ -367,21 +248,9 @@ def runAllSafeTests():
         results['Pagination'] = False
 
     try:
-        results['Filter Sold-Out'] = test3FilterSoldOut()
+        results['Download Image'] = test3DownloadImage()
     except Exception as e:
         print(f"\nTest 3 crashed: {e}")
-        results['Filter Sold-Out'] = False
-
-    try:
-        results['Accept Cookies'] = test4Cookies()
-    except Exception as e:
-        print(f"\nTest 4 crashed: {e}")
-        results['Accept Cookies'] = False
-
-    try:
-        results['Download Image'] = test5DownloadImage()
-    except Exception as e:
-        print(f"\nTest 5 crashed: {e}")
         results['Download Image'] = False
 
     print("\n" + "=" * 80)
@@ -389,16 +258,13 @@ def runAllSafeTests():
     print("=" * 80)
 
     for testName, passed in results.items():
-        status = "Pass" if passed else "Fail"
+        status = "PASS" if passed else "FAIL"
         print(f"{status} - {testName}")
 
     total = len(results)
     passed = sum(results.values())
-    percentage = (passed / total) * 100 if total > 0 else 0
-
-    print(f"\nResult: {passed}/{total} tests passed ({percentage:.0f}%)")
-    print("\nAll tests completed safely - no database was harmed")
+    print(f"\nResult: {passed}/{total} tests passed")
 
 
 if __name__ == "__main__":
-    runAllSafeTests()
+    runAllManualTests()

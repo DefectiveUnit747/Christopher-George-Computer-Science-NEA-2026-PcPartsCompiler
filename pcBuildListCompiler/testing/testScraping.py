@@ -1,7 +1,9 @@
 import unittest
 import logging
+import io
 from unittest.mock import patch, MagicMock
 from bs4 import BeautifulSoup
+from PIL import Image
 from pcBuildListCompiler.scrapingTools.scraper import Scraper
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
@@ -66,8 +68,8 @@ fieldMapping = {
     }
 }
 
+
 def makeScraper():
-    """Create a Scraper without launching Chrome"""
     scraper = Scraper.__new__(Scraper)
     scraper.baseUrl = "https://www.cclonline.com"
     scraper.categoryUrl = ""
@@ -76,12 +78,20 @@ def makeScraper():
     scraper._requestSession = None
     return scraper
 
+
 def makeHtml(rows):
-    # Build HTML table from a list of (label, value) tuples"
     rowHtml = ""
     for label, value in rows:
         rowHtml += f"<tr><td>{label}</td><td>{value}</td></tr>"
     return f"<html><body><table>{rowHtml}</table></body></html>"
+
+
+def makeFakeImageBytes():
+    img = Image.new("RGB", (100, 100), color=(255, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
+
 
 class TestGetNameNumberPriceUrl(unittest.TestCase):
 
@@ -307,6 +317,48 @@ class TestExtractFromSpecsTableMissingTable(unittest.TestCase):
         result = self.scraper.extractFromSpecsTable(fieldMapping, soup, "cpu")
         logger.info(f"Result with no table: {result}")
         self.assertEqual(result, {})
+
+
+class TestDownloadPartImage(unittest.TestCase):
+
+    def setUp(self):
+        logger.info(f"Running {self._testMethodName}")
+        self.scraper = makeScraper()
+
+    def testDownloadsAndSavesImage(self):
+        html = """
+        <html><body>
+            <div class="owl-item active">
+                <img id="imgImage" data-src="https://example.com/cpu-image.jpg" />
+            </div>
+        </body></html>
+        """
+        soup = BeautifulSoup(html, "html.parser")
+
+        with patch("pcBuildListCompiler.scrapingTools.scraper.requests.get") as mockGet:
+            mockGet.return_value.content = makeFakeImageBytes()
+
+            import tempfile
+            with tempfile.TemporaryDirectory(prefix="test_image_") as tmpDir:
+                logger.info(f"Created temp directory: {tmpDir}")
+                self.scraper._projectRoot = tmpDir
+
+                imageTag = soup.find("img", id="imgImage")
+                logger.info(f"Image tag found")
+                logger.info(f"Image URL: {imageTag.get('data-src')}")
+
+                result = self.scraper.downloadPartImage(soup, "TEST-001", "cpuImages")
+
+                logger.info(f"Returned path: {result}")
+                self.assertIsNotNone(result)
+                self.assertIn("TEST-001.jpg", result)
+                self.assertIn("cpuImages", result)
+
+                import os
+                fullPath = os.path.join(tmpDir, result)
+                self.assertTrue(os.path.exists(fullPath))
+                logger.info(f"Image saved successfully at: {fullPath}")
+
 
 if __name__ == "__main__":
     unittest.main()

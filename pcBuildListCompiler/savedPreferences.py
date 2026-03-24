@@ -6,7 +6,7 @@ RAWG_SEARCH_URL = "https://api.rawg.io/api/games"
 def extractPreferences(data):
     preferences = {
         "budget": int(data.get("budget", 1400)),
-        "aesthetics": int(data.get("aesthetics", 2)),
+        "efficiency": int(data.get("efficiency", 2)),
         "futurePref": int(data.get("futurePref", 4)),
         "gpuPreference": data.get("gpuPreference", "any")
     }

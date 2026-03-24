@@ -17,7 +17,6 @@ class TestFlaskRoutes(unittest.TestCase):
     def tearDown(self):
         logger.info(f"Torn down {self._testMethodName}")
 
-    # /searchForGame tests
     def testSearchForGameUnder3CharsReturnsEmptyList(self):
         response = self.client.get("/searchForGame?q=cy")
         logger.info(f"Status: {response.status_code}, Data: {response.get_json()}")
@@ -55,38 +54,36 @@ class TestFlaskRoutes(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(data, [])
 
-    # /generateBuild tests
     def testGenerateBuildReturns404WhenNoBuildFound(self):
-        with patch("pcBuildListCompiler.app.Storage") as mockStorage:
-            mockStorage.buildPreferences = {
-                "budget": 50, "gpuPreference": "any",
-                "aesthetics": 2, "futurePref": 4
-            }
-            mockStorage.gameData = {"tier": "medium"}
-            with patch("pcBuildListCompiler.app.PcBuildCompiler") as mockCompiler:
-                mockCompiler.return_value.findBestBuild.return_value = (None, 0, 0)
-                response = self.client.post("/generateBuild")
-                logger.info(f"Status: {response.status_code}")
-                self.assertEqual(response.status_code, 404)
+        with patch("pcBuildListCompiler.app.PcBuildCompiler") as mockCompiler:
+            mockCompiler.return_value.findBestBuild.return_value = (None, 0, 0)
+            with self.client.session_transaction() as sess:
+                sess["buildPreferences"] = {
+                    "budget": 50, "gpuPreference": "any",
+                    "efficiency": 2, "futurePref": 4
+                }
+                sess["gameData"] = {"tier": "medium"}
+            response = self.client.post("/generateBuild")
+            logger.info(f"Status: {response.status_code}")
+            self.assertEqual(response.status_code, 404)
 
     def testGenerateBuildReturns200WithValidBuild(self):
-        with patch("pcBuildListCompiler.app.Storage") as mockStorage:
-            mockStorage.buildPreferences = {
-                "budget": 2000, "gpuPreference": "any",
-                "aesthetics": 2, "futurePref": 4
+        with patch("pcBuildListCompiler.app.PcBuildCompiler") as mockCompiler:
+            mockBuild = {
+                "gpu": MagicMock(data={"name": "RTX 4070", "price": 599.99}),
+                "cpu": MagicMock(data={"name": "Ryzen 7", "price": 399.99}),
             }
-            mockStorage.gameData = {"tier": "medium"}
-            with patch("pcBuildListCompiler.app.PcBuildCompiler") as mockCompiler:
-                mockBuild = {
-                    "gpu": MagicMock(data={"name": "RTX 4070", "price": 599.99}),
-                    "cpu": MagicMock(data={"name": "Ryzen 7", "price": 399.99}),
+            mockCompiler.return_value.findBestBuild.return_value = (mockBuild, 85, 1800)
+            with self.client.session_transaction() as sess:
+                sess["buildPreferences"] = {
+                    "budget": 2000, "gpuPreference": "any",
+                    "efficiency": 2, "futurePref": 4
                 }
-                mockCompiler.return_value.findBestBuild.return_value = (mockBuild, 85, 1800)
-                response = self.client.post("/generateBuild")
-                logger.info(f"Status: {response.status_code}")
-                self.assertEqual(response.status_code, 200)
+                sess["gameData"] = {"tier": "medium"}
+            response = self.client.post("/generateBuild")
+            logger.info(f"Status: {response.status_code}")
+            self.assertEqual(response.status_code, 200)
 
-    # checkMaintenance tests
     def testCheckMaintenanceReturns503WhenModeTrue(self):
         with patch("pcBuildListCompiler.app.maintenanceMode", True):
             response = self.client.get("/")
@@ -99,30 +96,31 @@ class TestFlaskRoutes(unittest.TestCase):
             logger.info(f"Status: {response.status_code}")
             self.assertEqual(response.status_code, 302)
 
-    # /saveValues test
     def testSaveValuesStoresPreferencesCorrectly(self):
-        with patch("pcBuildListCompiler.app.Storage") as mockStorage:
-            instance = mockStorage.getInstance.return_value
-            response = self.client.post("/saveValues", json={
-                "budget": 2000,
-                "aesthetics": 3,
-                "futurePref": 4,
-                "gpuPreference": "nvidia"
-            })
-            logger.info(f"Status: {response.status_code}")
-            self.assertEqual(response.status_code, 200)
+        response = self.client.post("/saveValues", json={
+            "budget": 2000,
+            "efficiency": 3,
+            "futurePref": 4,
+            "gpuPreference": "nvidia"
+        })
+        data = response.get_json()
+        logger.info(f"Status: {response.status_code}, Preferences returned: {data}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data["budget"], 2000)
+        self.assertEqual(data["efficiency"], 3)
+        self.assertEqual(data["gpuPreference"], "nvidia")
 
-    # /saveGame test
     def testSaveGameStoresGameDataCorrectly(self):
         with patch("pcBuildListCompiler.app.saveGamePreference") as mockSave:
-            mockSave.return_value = None
+            mockSave.return_value = {"tier": "high", "game": "Cyberpunk 2077"}
             response = self.client.post("/saveGame", json={
-                "game": "Cyberpunk 2077"
+                "name": "Cyberpunk 2077"
             })
-            logger.info(f"Status: {response.status_code}")
+            data = response.get_json()
+            logger.info(f"Status: {response.status_code}, Data: {data}")
             self.assertEqual(response.status_code, 200)
+            self.assertEqual(data["tier"], "high")
 
-    # saveGamePreference tier classification tests
     def testSaveGamePreferenceLowTierOldGame(self):
         with patch("pcBuildListCompiler.savedPreferences.requests.get") as mockGet:
             mockGet.return_value.status_code = 200

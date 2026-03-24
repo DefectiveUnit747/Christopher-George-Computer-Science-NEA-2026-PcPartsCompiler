@@ -1,10 +1,10 @@
 from flask import Flask, render_template, redirect, jsonify, request
 from pcBuildListCompiler.savedPreferences import *
 from pcBuildListCompiler.savedPreferences import extractPreferences, saveGamePreference
-from pcBuildListCompiler.storage import Storage
 from pcBuildListCompiler.createBuildList import PcBuildCompiler
 import requests
 from flask_apscheduler import APScheduler
+from flask import Flask, render_template, redirect, jsonify, request, session
 
 app = Flask(__name__)
 app.secret_key = "SuperSecretKeyTEMPORARY"
@@ -76,7 +76,7 @@ def saveGame():
         gameName = data.get("name")
         gameData = saveGamePreference(gameName)
 
-        Storage.gameData = gameData
+        session["gameData"] = gameData
         return jsonify(gameData), 200
 
     except Exception as e:
@@ -87,7 +87,7 @@ def saveValues():
     try:
         data = request.get_json()
         preferences = extractPreferences(data)
-        Storage.buildPreferences = preferences
+        session["buildPreferences"] = preferences
         print(f"Saved preferences: {preferences}")
         return jsonify(preferences), 200
     except Exception as e:
@@ -103,11 +103,11 @@ def generateBuild():
     try:
 
         # Load preferences
-        budget = int(Storage.buildPreferences.get("budget", 1400))
-        gpuPreference = Storage.buildPreferences.get("gpuPreference", "any")
-        aestheticsWeightage = int(Storage.buildPreferences.get("aesthetics", 2))
-        futureWeight = int(Storage.buildPreferences.get("futurePref", 4))
-        tier = Storage.gameData.get("tier", "medium")
+        budget = int(session.get("buildPreferences", {}).get("budget", 1400))
+        gpuPreference = session.get("buildPreferences", {}).get("gpuPreference", "any")
+        efficiencyWeightage = int(session.get("buildPreferences", {}).get("efficiency", 2))
+        futureWeight = int(session.get("buildPreferences", {}).get("futurePref", 4))
+        tier = session.get("gameData", {}).get("tier", "medium")
 
         gpuMapping = {
             "any": "None",
@@ -120,11 +120,11 @@ def generateBuild():
         print(f"Budget: £{budget}, GPU: {gpuPreference}, Tier: {tier}")
 
         builder = PcBuildCompiler(
-            budget=budget,
-            gpuPreference=gpuPreference,
-            aestheticsWeight=aestheticsWeightage,
-            futureWeight=futureWeight,
-            tier=tier
+            budget = budget,
+            gpuPreference = gpuPreference,
+            efficiencyWeight = efficiencyWeightage,
+            futureWeight = futureWeight,
+            tier = tier
         )
 
         bestBuild, bestScore, bestPrice = builder.findBestBuild()

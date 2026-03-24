@@ -63,7 +63,7 @@ class TestBuildCompilationIntegration(unittest.TestCase):
 
     def testFullBuildGenerationCompletesSuccessfully(self):
         compiler = PcBuildCompiler(budget=1400, gpuPreference="None",
-                                   aestheticsWeight=2, futureWeight=4, tier="medium")
+                                   efficiencyWeight=2, futureWeight=4, tier="medium")
         parts = self._makeValidParts()
 
         def loadParts(dbPath=None):
@@ -78,7 +78,7 @@ class TestBuildCompilationIntegration(unittest.TestCase):
 
     def testNoBuildFoundWhenBudgetTooLow(self):
         compiler = PcBuildCompiler(budget=50, gpuPreference="None",
-                                   aestheticsWeight=2, futureWeight=4, tier="medium")
+                                   efficiencyWeight=2, futureWeight=4, tier="medium")
         parts = self._makeValidParts()
 
         def loadParts(dbPath=None):
@@ -105,7 +105,7 @@ class TestBuildCompilationIntegration(unittest.TestCase):
             compiler.validParts = filteredParts
 
         compiler = PcBuildCompiler(budget=1400, gpuPreference="Nvidia",
-                                   aestheticsWeight=2, futureWeight=4, tier="medium")
+                                   efficiencyWeight=2, futureWeight=4, tier="medium")
         with patch.object(compiler, "loadValidParts", loadNvidiaOnly):
             bestBuild, bestScore, bestPrice = compiler.findBestBuild()
             logger.info(f"GPU in build: {bestBuild['gpu'].data['manufacturerName'] if bestBuild else None}")
@@ -141,7 +141,7 @@ class TestBuildCompilationIntegration(unittest.TestCase):
                 "maxMemory": 128, "url": "", "imagePath": ""
             })))
         compiler = PcBuildCompiler(budget=1400, gpuPreference="None",
-                                   aestheticsWeight=2, futureWeight=4, tier="medium")
+                                   efficiencyWeight=2, futureWeight=4, tier="medium")
 
         def loadParts(dbPath=None):
             self._loadValidParts(compiler, parts)
@@ -152,6 +152,7 @@ class TestBuildCompilationIntegration(unittest.TestCase):
             elapsed = time.time() - start
             logger.info(f"Build completed in {elapsed:.10f}s")
             self.assertLess(elapsed, 10)
+
 
 if __name__ == "__main__":
     unittest.main()

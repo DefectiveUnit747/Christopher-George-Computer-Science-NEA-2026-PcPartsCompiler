@@ -19,6 +19,7 @@ from pcBuildListCompiler.createBuildList import (
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(message)s")
 logger = logging.getLogger(__name__)
 
+
 class TestIsCpuCompatibleWithMotherboard(unittest.TestCase):
 
     def setUp(self):
@@ -193,6 +194,34 @@ class TestIsPsuCompatibleWithMotherboard(unittest.TestCase):
         self.assertFalse(result)
 
 
+class TestPsuIsCompatibleWithFullBuild(unittest.TestCase):
+
+    def setUp(self):
+        logger.info(f"Running {self._testMethodName}")
+
+    def testSufficientWattageForCombinedBuildReturnsTrue(self):
+        psu = PSU({"wattage": 850, "finalScore": 50, "price": 89})
+        build = {
+            "cpu": CPU({"tdpWatts": 105, "finalScore": 50, "price": 200}),
+            "gpu": GPU({"tdpWatts": 200, "finalScore": 50, "price": 400}),
+            "motherboard": Motherboard({"tdpWatts": 15, "finalScore": 50, "price": 150})
+        }
+        result = psu.isCompatibleWith(build)
+        logger.info(f"psu wattage=850, combined tdp=320, result={result}")
+        self.assertTrue(result)
+
+    def testInsufficientWattageForCombinedBuildReturnsFalse(self):
+        psu = PSU({"wattage": 300, "finalScore": 50, "price": 89})
+        build = {
+            "cpu": CPU({"tdpWatts": 105, "finalScore": 50, "price": 200}),
+            "gpu": GPU({"tdpWatts": 300, "finalScore": 50, "price": 400}),
+            "motherboard": Motherboard({"tdpWatts": 15, "finalScore": 50, "price": 150})
+        }
+        result = psu.isCompatibleWith(build)
+        logger.info(f"psu wattage=300, combined tdp=420, result={result}")
+        self.assertFalse(result)
+
+
 class TestMergeSortParts(unittest.TestCase):
 
     def setUp(self):
@@ -265,6 +294,8 @@ class TestBranchAndBoundUpper(unittest.TestCase):
         result = self.compiler._branchAndBoundUpper(["cpu", "gpu"])
         logger.info(f"Upper bound result: {result}, expected: 200")
         self.assertEqual(result, 200)
+
+
 
 if __name__ == "__main__":
     unittest.main()

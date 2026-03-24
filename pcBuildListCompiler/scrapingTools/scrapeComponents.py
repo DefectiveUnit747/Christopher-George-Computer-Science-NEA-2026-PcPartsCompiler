@@ -146,7 +146,7 @@ manufacturerMap = computerParts.getManufacturerMap()
 ROOT_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 DATABASE_PATH = os.path.join(ROOT_DIRECTORY, "computerParts.db")
 
-class componentScraper(Scraper):
+class ComponentScraper(Scraper):
     def __init__(self, baseUrl, database):
         logger.info("Initialising component scraper")
         super().__init__(baseUrl, "")
@@ -294,4 +294,4 @@ class componentScraper(Scraper):
                         logger.warning("Driver quit failed — ignoring")
                     self.driver = None
 
-scraper = componentScraper("https://www.cclonline.com", computerParts)
+scraper = ComponentScraper("https://www.cclonline.com", computerParts)

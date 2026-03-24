@@ -1,6 +1,7 @@
 import sqlite3
 import math
 import logging
+from abc import ABC, abstractmethod
 
 from pcBuildListCompiler.compatibilityFunctions import *
 
@@ -90,8 +91,7 @@ GPU_MAPPING = {
 
 COMPONENT_ORDER = ["gpu", "cpu", "motherboard", "ram", "storage", "psu", "case"]
 
-
-class Component:
+class Component(ABC):
     def __init__(self, data: dict):
         self.data = data
 
@@ -103,8 +103,9 @@ class Component:
     def finalScore(self):
         return self.data.get("finalScore", 0)
 
+    @abstractmethod
     def isCompatibleWith(self, build: dict) -> bool:
-        return True
+        pass
 
 class CPU(Component):
     def isCompatibleWith(self, build: dict) -> bool:
@@ -166,7 +167,8 @@ class Case(Component):
         return True
 
 class Storage(Component):
-    pass
+    def isCompatibleWith(self, build: dict) -> bool:
+        return True
 
 
 COMPONENT_CLASSES = {
@@ -181,10 +183,10 @@ COMPONENT_CLASSES = {
 
 
 class PcBuildCompiler:
-    def __init__(self, budget, gpuPreference, aestheticsWeight, futureWeight, tier):
+    def __init__(self, budget, gpuPreference, efficiencyWeight, futureWeight, tier):
         self.budget = budget
         self.gpuPreference = gpuPreference
-        self.aestheticsWeight = aestheticsWeight
+        self.efficiencyWeight = efficiencyWeight
         self.futureWeight = futureWeight
         self.tier = tier
 
@@ -222,7 +224,7 @@ class PcBuildCompiler:
             score = float(value.get("score", 0))
             eff = float(value.get("scoreEfficiency", 0))
             upg = float(value.get("scoreUpgradeability", 0))
-            weighted = 5 * score + self.aestheticsWeight * eff + self.futureWeight * upg
+            weighted = 5 * score + self.efficiencyWeight * eff + self.futureWeight * upg
             value.pop("score", None)
             value.pop("scoreEfficiency", None)
             value.pop("scoreUpgradeability", None)
